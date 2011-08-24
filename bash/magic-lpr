@@ -1,0 +1,901 @@
+#!/bin/bash 
+#
+# magic-lpr script
+# 
+# converts some file types to postscript and prints them
+#
+# by Markus Mohnen
+#
+# Changes by Frank Steiner (also look at magic-lpr.tk)
+# - added a parameter for the printer entries in system.magicrc:
+#   <name>_REMOVEDUPLEX=1
+#   This will prevent the statusdict header containing
+#   information about duplexmode, because this duplexmode command
+#   will fail for HP deskjet models, even if it is set to false.
+# - Note that the interactive mode cannot handle this parameter.
+#   I.e., when saving a local config, the option must be set
+#   manually into ~/.magicrc
+# - Additionally, the -s parameter, formerly used for selecting
+#   a slide printing configuration, will now prevent the duplexmode
+#   option to be created. 
+#   Note: For this to work with interactive mode, the magic-lpr.tk
+#   must be adjusted, too, to pass this parameter back to magic-lpr.
+#
+# - added -Z fuer zooming the output to 0.98 of the original
+#   size. That's a correction for Deskjet 520
+# - added a parameter for the printer entries in system.magicrc:
+#   <name>_SCALE=1 so scaling can be defined for special printers
+#
+# - added -l for landscape printing. Just rotates bu 90 degrees.
+#   For easy use of the landscape.sty in TeX
+#
+# - set medium size for a2ps to A4, because otherwise some plain
+#   ascii files will not be printed. Also force print even if a2ps
+#   thinks the file is binary. If we are in "convert_text", we know
+#   that the file *is* text.
+
+
+PATH=/usr/local/bin:$PATH
+FILECHECKER="file"
+# FILECHECKER="file -m /home/markusm/work/MAGIC/magic.sol.neu"
+progname=`basename $0`
+set -h
+
+function usage() {
+  echo "Usage: $progname [option]... [file]... " 1>&2
+  echo "valid options are:" 1>&2
+  echo "  -# number     specifies number of copies" 1>&2
+  echo "  -1            print 1 page per sheet in portrait mode" 1>&2
+  echo "  -2            print 2 pages per sheet in landscape mode" 1>&2
+  echo "  -4            print 4 pages per sheet in portrait mode" 1>&2
+  echo "  -d            duplex. Prints on front and back page" 1>&2 
+  echo "  -t            tumble. Prints on front and back page. Back page is rotated" 1>&2
+  echo "  -l            landscape. Just rotates by 90 degrees. Don't use with 2pages/sheet" 1>&2
+  echo "  -c            corrects positioning of back pages (duplex only)" 1>&2
+  echo "  -b            book. Insert blank pages and rearrange" 1>&2
+  echo "  -p range      specifies the pages to be processed" 1>&2
+  echo "  -g            prints on grey paper (default)" 1>&2
+  echo "  -w            prints on white paper" 1>&2
+  echo "  -m            prints with manual feed (use with care)" 1>&2
+  echo "  -s            do not create duplexmode instruction (would fail on HP deskjets)"  1>&2
+  echo "  -R size       force resizing to size (a3, a4, a5, b5, letter, legal, 10x14)"  1>&2
+  echo "                for foreign format PS files use '-R A4'" 1>&2
+  #echo "  -f           force selected tray, disable auto tray switch (use with care)" 1>&2
+  echo "  -r            reverse page ordering before printing" 1>&2
+  echo "  -x dpi        specifies DPI (for DVI only) (obsolete; use -X DPI=dpi instead)" 1>&2
+  echo "  -a            append to output file instead of creating new" 1>&2
+  echo "  -o output     specifies output (may be pipe, e.g. -o\"|cat\")" 1>&2
+  echo "  -T type       force type; use '-X types' for a list of valid types" 1>&2
+  echo "  -D            use DEFAULT printer: $DEFAULT_PRINTER" 1>&2
+  echo "                and DEFAULT print command: $DEFAULT_PRINT_CMD" 1>&2
+  echo "  -S            silent mode" 1>&2
+  echo "  -Z            scale output down to 0.98 of the original. This is a" 1>&2
+  echo "                correction for the deskjet 520" 1>&2
+  echo "  -C            configuration mode" 1>&2
+  echo "  -I            interactive mode" 1>&2
+  echo "  -h            display this help and exit" 1>&2
+  echo "  -X options    pass extra options to converter. options is a list of" 1>&2
+  echo "                'name[=value]' pairs separated by blanks. Possible values are:" 1>&2
+  echo "                    types               shows a list of possible types (see -T)" 1>&2
+  echo "                    printconf           shows all availabe configurations" 1>&2
+  echo "                    printconf=name      select 'name' as configuration" 1>&2
+  echo "                    preview             immediately starts preview (interactive)" 1>&2
+  echo "                    DPI=dpi             specifies dpi (DVI)" 1>&2
+  echo "  file          file to print (- for input from stdin)" 1>&2
+}
+
+function usage_types() {
+  echo "valid types are: F: PDF" 1>&2
+  echo "		 H: HTML (via html2ps)" 1>&2
+  echo "		 N: News" 1>&2
+  echo "		 M: Mail (folder)" 1>&2
+  echo "		 T: ISO-8859/1 (ISO latin1) Text" 1>&2
+  echo "		 L: LaTeX" 1>&2
+  echo "		 D: DVI" 1>&2
+  echo "		 P: PostScript" 1>&2
+  echo "		 ?: Autodetect" 1>&2
+}
+
+function usage_configs() {
+  echo "valid configurations are:" 1>&2
+  for a in `env | grep "_PRINT_CMD=" | sed 's/_PRINT_CMD=.*//'`  
+  do
+    eval foo='$'$a'_PRINTER'
+    if [ "$foo" = '""' ]
+    then
+      eval echo '"	$a: $'$a'_PRINT_CMD $'$a'_PRINT_OPTIONS"'
+    else
+      eval echo '"	$a: $'$a'_PRINT_CMD -P$foo $'$a'_PRINT_OPTIONS"'
+    fi
+  done
+}
+
+function parseonextraarg() {
+  local o
+  local OLDIFS=$IFS
+  local pos=1
+
+  IFS="="
+  for o in $@
+  do
+    if [ $pos -eq 1 ]
+    then
+      XTRACOUNT=$[$XTRACOUNT+1]
+      eval "XTRANAME$XTRACOUNT=$o"
+    else
+      eval "XTRAVAL$XTRACOUNT=$o"
+    fi
+    pos=$[$pos+1]
+  done
+  IFS=$OLDIFS
+  if [ $pos -gt 3 ]
+  then
+    echo -e "\n$progname: invalid parameter '$*'; too many '='" 1>&2
+    exit 1
+  fi
+}
+
+function  parsextrargs() {
+  local o
+  for o in $*
+  do
+    parseonextraarg $o
+  done
+}
+
+function getxtraarg() {
+  local name=$1
+  local count=1
+  local xtraname
+  while [ $count -le $XTRACOUNT ]
+  do
+    eval "xtraname=\$XTRANAME$count"
+    eval "xtraval=\${XTRAVAL$count:-@}"
+    if [ "$xtraname" = "$name" ]
+    then
+      echo "$xtraval"
+    fi
+    count=$[$count+1]
+  done
+}
+
+rm -f /tmp/$$*
+tmpcount=1
+tmpfiles=""
+
+function remove_tmpfiles () {
+  if [ "$tmpfiles" != "" ]
+  then
+    [ ${SILENT:-1} -eq 0 ] && echo "  ... removing temp files"
+    rm -f $tmpfiles
+    tmpfiles=""
+  fi
+  }
+  
+function remove_alltmpfiles () {
+  if [ "$tmpfiles" != "" -o "$NEWTMPFILE" != "" ]
+  then
+    [ ${SILENT:-1} -eq 0 ] && echo "  ... removing all temp files"
+    rm -f $tmpfiles $NEWTMPFILE
+    tmpfiles=""
+  fi
+  }
+
+function add_tempfiles () {
+  tmpfiles="$tmpfiles $*"
+  }
+  
+function to_newtmpfile () {
+  add_tempfiles $NEWTMPFILE
+  NEWTMPFILE=/tmp/$$$tmpcount
+  # echo "new temp file: $NEWTMPFILE" 1>&2
+  if [ $SILENT -eq 0 ]
+  then
+    eval $1
+  else
+    (eval $1) >> /dev/null 2>&1
+  fi
+  tmpcount=$[$tmpcount+1]
+  }
+  
+function to_newtmpfile_delold () {
+  remove_tmpfiles
+  add_tempfiles $NEWTMPFILE
+  NEWTMPFILE=/tmp/$$$tmpcount
+  # echo "new temp file: $NEWTMPFILE" 1>&2
+  if [ $SILENT -eq 0 ]
+  then
+    eval $1
+  else
+    (eval $1) >> /dev/null 2>&1
+  fi
+  tmpcount=$[$tmpcount+1]
+  }
+  
+trap 'remove_alltmpfiles; (kill $!; kill -9 $!) >> /dev/null 2>&1' 0 1 2 3 9 15
+
+umask 077
+
+function absolute_path() {
+  file=$1
+  case "$file" in
+    /*) ;;
+    *) file="$PWD/$1"
+       ;;
+  esac
+  echo $file
+  }
+  
+function absolute_pathdirname() {
+  local f=`absolute_path $1`
+  echo `dirname $f`
+  }
+  
+function detect_filetype() {
+  FILETYPE=`$FILECHECKER $1 | sed 's/^[^:]*:[ 	]*//1'`
+}
+  
+function detect_type() {
+  if [ "$TYPE" = "?" ]
+  then
+    [ $SILENT -eq 0 ] && echo -n "  ... autodetecting file type "
+    detect_filetype $1
+    case "$FILETYPE" in
+      *LaTeX* | *latex*)     TYPE="L"; [ $SILENT -eq 0 ] && echo "[LaTeX]";;
+      *HTML*  | *html*)      TYPE="H"; [ $SILENT -eq 0 ] && echo "[HTML]";;
+      *news*)                TYPE="N"; [ $SILENT -eq 0 ] && echo "[News]";;
+      *mail*)                TYPE="M"; [ $SILENT -eq 0 ] && echo "[Mail (folder)]";;
+      *PostScript*)          TYPE="P"; [ $SILENT -eq 0 ] && echo "[PostScript]";;
+      *dvi*)                 TYPE="D"; [ $SILENT -eq 0 ] && echo "[DVI]";;
+      *DVI*)                 TYPE="D"; [ $SILENT -eq 0 ] && echo "[DVI]";;
+      *PDF*)                 TYPE="F"; [ $SILENT -eq 0 ] && echo "[PDF]";;
+      *text*)                TYPE="T"; [ $SILENT -eq 0 ] && echo "[Text]";;
+      *)                     TYPE="?"; [ $SILENT -eq 0 ] && echo "[unsupported]";;
+    esac
+  fi
+  }
+
+function lauch_interactive() {
+  if [ ! -x $LIBDIR/magic-lpr.tk ]
+  then
+    echo -e "\n$progname: interactive program '$LIBDIR/magic-lpr.tk' not executable" 1>&2
+    exit 1
+  fi
+  $LIBDIR/magic-lpr.tk
+}
+
+function convert_pdf() {
+  to_newtmpfile_delold 'acroread -toPostScript < $WFILE > $NEWTMPFILE'
+  WFILE=$NEWTMPFILE
+}
+
+function convert_html() {
+  local GENOPTS=""
+  if [ $DOUBLE -eq 1 ]
+  then
+    [ $SILENT -eq 0 ] && echo "  ... HTML: selecting two pages per sheet"
+    GENOPTS="$GENOPTS -2"
+    DOUBLE=0
+  fi
+  if [ $TUMBLE -ne 0 ]
+  then
+    [ $SILENT -eq 0 ] && echo "  ... HTML: selecting tumble (rotated duplex)"
+    GENOPTS="$GENOPTS -x 1"
+    TUMBLE=0
+    DUPLEX=0
+  else
+    if [ $DUPLEX -ne 0 ]
+    then
+      [ $SILENT -eq 0 ] && echo "  ... HTML: selecting duplex"
+      GENOPTS="-x 1"
+      DUPLEX=0
+    fi
+  fi
+  to_newtmpfile 'html2ps -b $FILEDESC -d $GENOPTS -o $NEWTMPFILE $WFILE'
+  WFILE=$NEWTMPFILE
+}
+
+function convert_latex() {
+  local OLD_TEXINPUTS=$TEXINPUTS
+  TEXINPUTS="`absolute_pathdirname $WFILE`::"
+  export TEXINPUTS
+  to_newtmpfile 'echo "\\nonstopmode\\input{$WFILE}" > $NEWTMPFILE.tex'
+  WFILE=$NEWTMPFILE.tex
+  pushd `dirname $WFILE` >> /dev/null
+  touch `basename $WFILE .tex`.aux
+  chmod 644 $WFILE `basename $WFILE .tex`.aux
+  if [ $SILENT -eq 0 ]
+  then
+    latex $WFILE
+  else
+    ( latex $WFILE ) >> /dev/null 2>&1
+  fi
+  to_newtmpfile 'mv `basename $WFILE .tex`.dvi $NEWTMPFILE'
+  eval add_tempfiles "`basename $WFILE .tex`.*"
+  WFILE=$NEWTMPFILE
+  remove_tmpfiles
+  popd >> /dev/null
+  TEXINPUTS=$OLD_TEXINPUTS
+}
+
+function convert_mail() {
+  local MPOPTS=""
+  local MPSOPT="-onesided -linelength 102"
+  if [ $DOUBLE -eq 1 ]
+  then
+    [ $SILENT -eq 0 ] && echo "  ... Mail: selecting two pages per sheet"
+    MPOPTS="$MPOPTS -landscape"
+    DOUBLE=0
+  fi
+  if [ $DUPLEX -ne 0 ]
+  then
+    [ $SILENT -eq 0 ] && echo "  ... Mail: selecting duplex"
+    MPSOPT="-twosided"
+    DUPLEX=0
+  fi
+  if [ $TUMBLE -ne 0 ]
+  then
+    [ $SILENT -eq 0 ] && echo "  ... Mail: selecting tumble (rotated duplex)"
+    MPOPTS="$MPOPTS -tumble"
+    TUMBLE=0
+  fi
+    
+  to_newtmpfile_delold 'mp -folder $MPSOPT $MPOPTS $WFILE > $NEWTMPFILE'
+  WFILE=$NEWTMPFILE 
+}
+
+function convert_news() {
+  [ $SILENT -eq 0 ] && echo "  ... News: using Mail conversion"
+  convert_mail
+}
+
+function convert_text() {
+  local GENOPTS=""
+  if [ $DOUBLE -eq 1 ]
+  then
+    [ $SILENT -eq 0 ] && echo "  ... Text: selecting two pages per sheet"
+    GENOPTS="$GENOPTS -2r"
+    DOUBLE=0
+  fi
+  # if there is no resize option given, force A4, because otherwise
+  # a2ps seems to take "letter" for certain ascii files. No idea why.
+  if [ "$RESIZE" = "NO" ]
+  then
+    a2psmedia="-M A4"
+  else
+    a2psmedia=""
+  fi
+  to_newtmpfile_delold 'a2ps --print-anyway=1 $a2psmedia -B -b$FILEDESC -R --columns=1 $GENOPTS -o $NEWTMPFILE $WFILE'
+  WFILE=$NEWTMPFILE
+}
+
+function convert_dvi() {
+  [ "$DPI" = "?" ] && DPI=`getxtraarg dpi`
+  DPI=${DPI:-"?"}
+  [ "$DPI" = "?" ] && DPI=600
+  
+  if [ "$PAGES" != "" ]
+  then
+    [ $SILENT -eq 0 ] && echo "  ... DVI: selecting pages"
+    to_newtmpfile_delold 'dviselect -i $WFILE $NEWTMPFILE "$PAGES"'
+    WFILE=$NEWTMPFILE
+    PAGES=""
+  fi
+  
+  if [ $DOUBLE -eq 15 ] # DVI DOUBLE disabled
+  then
+    if [ $BOOK -eq 1 ]
+    then
+      if [ $DUPLEX -eq 1 ]
+      then
+	[ $SILENT -eq 0 ] && echo "  ... DVI: converting to two pages per sheet, duplex, and book"
+	to_newtmpfile_delold 'dvips -D$DPI -O -0.65cm,-0.75cm -f -t landscape -x 707 < $WFILE | psbook | pstops "4:0(0cm,0cm)+1(0cm,-14.85cm),2U(21cm,29.7cm)+3U(21cm,44.55cm)" > $NEWTMPFILE'
+	WFILE=$NEWTMPFILE
+      else
+	[ $SILENT -eq 0 ] && echo "  ... DVI: converting to two pages per sheet and book"
+	to_newtmpfile_delold 'dvips -D$DPI -O -0.65cm,-0.75cm -f -t landscape -x 707 < $WFILE | psbook | pstops "4:0(0cm,0cm)+1(0cm,-14.85cm),2(0cm,0cm)+3(0cm,-14.85cm)" > $NEWTMPFILE'
+	WFILE=$NEWTMPFILE
+      fi
+      BOOK=0
+    else
+      [ $SILENT -eq 0 ] && echo "  ... DVI: converting to two pages per sheet"
+      to_newtmpfile_delold 'dvidvi -m"2:0,1(21cm,0cm)" $WFILE $NEWTMPFILE;echo'
+      WFILE=$NEWTMPFILE
+      to_newtmpfile_delold 'dvips -D$DPI -O -0.65cm,-0.75cm -o $NEWTMPFILE -t landscape -x 707 $WFILE'
+      WFILE=$NEWTMPFILE
+    fi
+    DOUBLE=0
+  else
+    to_newtmpfile_delold 'dvips -D$DPI -o $NEWTMPFILE $WFILE'
+    WFILE=$NEWTMPFILE
+  fi
+  DPI="?"
+}
+
+function dothefile() {
+  
+  FILE=$1
+  FILEDESC=$2
+  
+  [ $SILENT -eq 0 ] && echo "  ... processing $FILEDESC"
+  
+  case $FILE in
+    -) [ $SILENT -eq 0 ] && echo "  ... getting input from stdin"
+       to_newtmpfile_delold 'cat > $NEWTMPFILE'
+       FILE=$NEWTMPFILE
+       FILEDESC="(stdin)"
+       ;;
+    http://* | ftp://* )
+      [ $SILENT -eq 0 ] && echo "  ... getting input from URL"
+      to_newtmpfile_delold 'wget -O $NEWTMPFILE $FILE'
+      FILE=$NEWTMPFILE
+      ;;
+  esac
+  
+  if [ ! -r $FILE ]
+  then
+    FILE=`dirname $1`/`basename $1 $TYPEEXT`$TYPEEXT
+    if [ ! -r $FILE ]
+    then
+      echo -e "\n$progname: file '$1' is not readable" 1>&2
+      exit 1
+    fi
+  fi
+  
+  WFILE=$FILE
+
+  detect_filetype $FILE
+  case "$FILETYPE" in
+    *uuencoded*) [ $SILENT -eq 0 ] && echo "  ... uudecoding $FILE"
+		 to_newtmpfile '( echo "begin 644 $NEWTMPFILE" ; tail +2 $WFILE ) | uudecode'
+		 WFILE=$NEWTMPFILE
+		 detect_filetype $WFILE
+  esac
+  
+  case "$FILETYPE" in
+    *btoa*) [ $SILENT -eq 0 ] && echo "  ... uncompressing $FILE"
+	    to_newtmpfile 'atob < $WFILE > $NEWTMPFILE'
+	    WFILE=$NEWTMPFILE
+	    detect_filetype $WFILE
+	    ;;
+    *gzip* | *compressed* ) [ $SILENT -eq 0 ] && echo "  ... uncompressing $FILE"
+			    to_newtmpfile 'gunzip -c $WFILE > $NEWTMPFILE'
+			    WFILE=$NEWTMPFILE
+			    detect_filetype $WFILE
+			    ;;
+  esac
+  
+  case "$FILETYPE" in
+    *PJL* | *"HP Printer"*) [ $SILENT -eq 0 ] && echo "  ... removing PJL header"
+	   to_newtmpfile 'gawk -vRS="%!" "{if (RS==\"\") print; else {printf RS; RS=\"\";}}" < $WFILE  > $NEWTMPFILE'
+	   WFILE=$NEWTMPFILE
+	   detect_filetype $WFILE
+	   ;;
+  esac
+  
+  detect_type $WFILE
+  
+  if [ $INTERACTIVE -eq 1 ]
+  then
+    if [ "$WFILE" != "$FILEDESC" ]
+    then
+      mv $WFILE /tmp/$$interactive
+      WFILE=/tmp/$$interactive
+    fi
+    remove_alltmpfiles
+    [ $SILENT -eq 0 ] && echo "  ... going interactive"
+    PREVIEW=`getxtraarg preview`
+    lauch_interactive
+  else
+    LASTTYPE=""
+    while [ \( "$TYPE" = "?" -o "$LASTTYPE" != "$TYPE" \) -a "$TYPE" != "P" ]
+    do
+      LASTTYPE=$TYPE
+      case $TYPE in
+	L) [ $SILENT -eq 0 ] && echo "  ... converting LaTeX"
+	   TYPE="?"; convert_latex;;
+	H) [ $SILENT -eq 0 ] && echo "  ... converting HTML"
+	   TYPE="?"; convert_html;;
+	N) [ $SILENT -eq 0 ] && echo "  ... converting News"
+	   TYPE="?"; convert_news;;
+	M) [ $SILENT -eq 0 ] && echo "  ... converting Mail"
+	   TYPE="?"; convert_mail;;
+	T) [ $SILENT -eq 0 ] && echo "  ... converting Text"
+	   TYPE="?"; convert_text;;
+	D) [ $SILENT -eq 0 ] && echo "  ... converting DVI"
+	   TYPE="?"; convert_dvi;;
+	F) [ $SILENT -eq 0 ] && echo "  ... converting PDF"
+	   TYPE="?"; convert_pdf;;
+	P) ;;
+	?) echo -e "\n$progname: unsupported file type '$TYPE'" 1>&2
+	   usage_types
+	   exit 1;;
+	"*") echo -e "\n$progname: unknown file type '$TYPE'." 1>&2
+	     usage_types
+	     exit 1;;
+      esac
+      detect_type $WFILE
+    done
+    
+    if [ "$DPI" != "?" ]
+    then
+      echo -e "\n$progname: -x $DPI has no effect for this file type" 1>&2
+      exit 1
+    fi
+    
+    detect_filetype $WFILE
+    case "$FILETYPE" in
+      *PostScript*) ;;
+      *) echo -e "\n$progname: Final file $WFILE is not PostScript" 1>&2
+	 echo "$progname: Its '$FILETYPE'"
+	 echo "$progname: Sorry, I can't print that" 1>&2
+	 exit 1;;
+    esac
+    
+    if [ "$PAGES" != "" ]
+    then
+      [ $SILENT -eq 0 ] && echo "  ... selecting pages"
+      to_newtmpfile_delold 'psselect -p$PAGES $WFILE $NEWTMPFILE'
+      WFILE=$NEWTMPFILE
+    fi
+    
+    if [ $BOOK -eq 1 ]
+    then
+      [ $SILENT -eq 0 ] && echo "  ... converting to book"
+      to_newtmpfile_delold 'psbook $WFILE $NEWTMPFILE'
+      WFILE=$NEWTMPFILE
+    fi
+    
+    if [ $DOUBLE -eq 1 ]
+    then
+      [ $SILENT -eq 0 ] && echo "  ... converting to two pages per sheet"
+      to_newtmpfile_delold 'pstops "2:0L@.707(21cm,0)+1L@.707(21cm,14.85cm)" $WFILE $NEWTMPFILE'
+      WFILE=$NEWTMPFILE
+    fi
+    
+    if [ $QUADRUPLE -eq 1 ]
+    then
+      [ $SILENT -eq 0 ] && echo "  ... converting to four pages per sheet"
+      to_newtmpfile_delold 'pstops "4:0@.5(0,14.85cm)+1@.5(10.5cm,14.85cm)+2@.5(0,0)+3@.5(10.5cm,0)" $WFILE $NEWTMPFILE'
+      WFILE=$NEWTMPFILE
+    fi
+    
+    if [ $REVERSE -eq 1 ]
+    then
+      [ $SILENT -eq 0 ] && echo "  ... reversing pages"
+      to_newtmpfile_delold 'pstops -0 $WFILE $NEWTMPFILE'
+      WFILE=$NEWTMPFILE
+    fi
+
+    # If we find the REMOVEDUPLEX flag set, do not create
+    # the statusdict header with duplex etc. information.
+    # Additionally, remove all existing duplex information.
+    if [ "$REMOVEDUPLEX" = "1" ]  
+    then
+      to_newtmpfile_delold 'cat $WFILE | sed "s/[[:alpha:]]* setduplexmode//g" >> $NEWTMPFILE'
+      WFILE=$NEWTMPFILE    
+    else
+      [ $SILENT -eq 0 -a $TUMBLE -ne 0 ] && \
+       echo "  ... selecting tumble (rotated duplex)" 
+      [ $SILENT -eq 0 -a $TUMBLE -eq 0 -a $DUPLEX -ne 0 ] && \
+       echo "  ... selecting duplex"
+      [ $SILENT -eq 0 -a $TRAY -eq 1 ] && \
+     echo "  ... selecting white paper"
+      [ $SILENT -eq 0 -a $MANUAL -eq 1 ] && \
+       echo "  ... selecting manual feed"
+      [ $SILENT -eq 0 -a $SCALE -eq 1 ] && \
+       echo "  ... scaling down for deskjet 520"
+      #[ $SILENT -eq 0 -a $FORCE -eq 1 ] && \
+       # echo "  ... forcing selected tray"
+      if [ $DUPLEX -eq 0 ]
+      then
+	DUPLEXTXT="false"
+      else
+	DUPLEXTXT="true"
+      fi
+      if [ $TUMBLE -eq 0 ]
+      then
+	TUMBLETXT="false"
+      else
+	TUMBLETXT="true"
+      fi
+      if [ $MANUAL -eq 0 ]
+      then
+	MANUALTXT="false"
+      else
+	MANUALTXT="true"
+      fi
+      if [ $FORCE -eq 0 ]
+      then
+	FORCETXT="true"
+      else
+	FORCETXT="false"
+      fi
+      to_newtmpfile_delold \
+       '(head -1 $WFILE; echo "statusdict begin $TRAY setpapertray $DUPLEXTXT setduplexmode $TUMBLETXT settumble  end statusdict /manualfeed $MANUALTXT put "; tail +2 $WFILE) >> $NEWTMPFILE'
+
+      # disabled for now. Maybe needed later...? Is a lot slower than just inserting the statusdict
+      # to_newtmpfile_delold 'a2ps -B -R --columns=1 --statusdict=papertray:$TRAY --statusdict=setduplexmode:$DUPLEXTXT --statusdict=settumble:$TUMBLETXT --statusdict=manualfeed:$MANUALTXT -o $NEWTMPFILE $WFILE'
+      # $FORCETXT settrayswitch
+      WFILE=$NEWTMPFILE
+    fi
+ 
+    if [ $DUPLEXCORRECT -eq 1 ]
+    then
+      [ $SILENT -eq 0 ] && echo "  ... correcting duplex back pages"
+      to_newtmpfile_delold 'pstops "2:0,1(0.5mm,1.25mm)" $WFILE > $NEWTMPFILE'
+      WFILE=$NEWTMPFILE
+    fi
+    
+    if [ "$RESIZE" != "NO" ]
+    then
+      [ $SILENT -eq 0 ] && echo "  ... resizing to size $RESIZE"
+      to_newtmpfile_delold 'psresize -p$RESIZE $WFILE $NEWTMPFILE'
+      WFILE=$NEWTMPFILE
+    fi
+    
+    if [ $SCALE -eq 1 ]
+    then
+      [ $SILENT -eq 0 ] && echo "  ... scalign down for deskjet 520"
+      to_newtmpfile_delold 'pstops "1:0@.97(0mm,9mm)" $WFILE > $NEWTMPFILE'
+      WFILE=$NEWTMPFILE
+    fi
+   
+    if [ $LANDSCAPE -eq 1 ]
+    then
+      [ $SILENT -eq 0 ] && echo "  ... rotating by 90 degrees for landscape"
+      to_newtmpfile_delold 'pstops "1:0R(-8.7cm,29.7cm)" $WFILE > $NEWTMPFILE'
+      WFILE=$NEWTMPFILE
+    fi
+   
+    if [ "$OUTPUT" = "" ]
+    then
+      if [ "$PRINTER" = "" ]
+      then
+	OUTPUT="| $PRINT_CMD $PRINT_OPTIONS"
+      else
+	OUTPUT="| $PRINT_CMD -P$PRINTER $PRINT_OPTIONS"
+      fi
+    fi
+    COUNT=1
+    while [ $COPIES -ge $COUNT ]
+    do
+      if [ $SILENT -eq 0 ]
+      then
+      [ $COUNT -gt 1 ] && echo "  ... printing copy '$COUNT' with '$OUTPUT'"
+      [ $COUNT -eq 1 ] && echo "  ... printing with '$OUTPUT'"
+      fi
+      if [ $SILENT -eq 0 ]
+      then
+	eval "(echo '%!PS-Adobe-2.0'; tail +2 $WFILE ) $OUTPUT" &
+      else
+	(eval "(echo '%!PS-Adobe-2.0'; tail +2 $WFILE ) $OUTPUT")  >> /dev/null 2>&1 &
+      fi
+      COUNT=$[$COUNT+1]
+      wait
+    done
+  fi
+}
+  
+export LIBDIR=`dirname  $0`
+LIBDIR="`dirname  $LIBDIR`/lib"
+CONF="$LIBDIR/system.magicrc"
+
+if [ ! -r $CONF ]
+then
+  echo -e "\n$progname: global configuration '$CONF' missing" 1>&2
+  exit 1
+fi
+
+set -a
+. $CONF
+
+CONF=$HOME/.magicrc
+[ -r $CONF ] && . $CONF
+
+SCRIPT=$0
+CONFIGURATION=0
+OUTPUT=""
+TYPE="?"
+TYPEEXT=""
+FILE=""
+XTRACOUNT=0
+LANDSCAPE=0
+
+case "$progname" in
+  *html-*)  TYPE=H; TYPEEXT="";;
+  *news-*)  TYPE=N; TYPEEXT="";;
+  *mail-*)  TYPE=M; TYPEEXT="";;
+  *text-*)  TYPE=T; TYPEEXT=".txt";;
+  *latex-*) TYPE=L; TYPEEXT=".tex";;
+  *dvi-*)   TYPE=D; TYPEEXT=".dvi";;
+  *ps-*)    TYPE=P; TYPEEXT=".ps";;
+  *pdf-*)   TYPE=F; TYPEEXT=".pdf";;
+esac
+
+while getopts "CISh124DZrstdwglmfcb#:ao:T:x:X:R:p:" c
+do
+  case $c in
+    h) usage
+       exit 0;;
+    1) DOUBLE=0;QUADRUPLE=0;;
+    2) DOUBLE=1;QUADRUPLE=0;;
+    4) DOUBLE=0;QUADRUPLE=1;;
+    D) DEFAULT=1;;
+    r) REVERSE=1;;
+    S) SILENT=1;;
+    I) if [ $INTERACTIVE -eq -1 ]
+       then
+	 [ $SILENT -eq 0 ] && echo "  ... interactive mode forbidden by configuration (use -C)"
+       else
+	INTERACTIVE=1
+       fi;;
+    C) CONFIGURATION=1;;
+    t) DUPLEX=1; TUMBLE=1;;
+    d) DUPLEX=1; TUMBLE=0;;
+    l) LANDSCAPE=1;;
+    c) DUPLEXCORRECT=1;;
+    w) TRAY=1;;
+    g) TRAY=0;;
+    m) MANUAL=1;;
+    s) REMOVEDUPLEX=1;;
+    f) FORCE=1;;
+    Z) SCALE=1;;
+    "R") RESIZE=$OPTARG;;
+    "#") COPIES=$OPTARG;;
+    p) PAGES=$OPTARG;;
+    a) APPEND=1;;
+    o) case "$OPTARG" in
+       "|"*) OUTPUT=$OPTARG;;
+       *) OUTPUT="> $OPTARG";;
+       esac;;
+    T) TYPE=$OPTARG;;
+    b) BOOK=1;;
+    x) echo -e "\n$progname: obsolte option -x used; use -X dpi=$OPTARG" 1>&2
+       DPI=$OPTARG;;
+    X) parsextrargs $OPTARG
+       ;;
+    *) echo -e "\n$progname: internal error: option '$OPTARG'" 1>&2
+       exit 1;;
+  esac
+done
+
+[ "`getxtraarg types`" != "" ] && usage_types && exit 0
+
+
+shift `expr $OPTIND - 1`
+
+if [ $COPIES -gt 1 ]
+then
+  case "$OUTPUT" in
+    ">"*) echo -e "\n$progname: output to file only with '-#1'" 1>&2
+	  exit 1;;
+  esac
+fi
+
+if [ $APPEND -eq 1 ]
+then
+  case "$OUTPUT" in
+    ">"*) OUTPUT=">$OUTPUT";;
+    *)    echo -e "\n$progname: cannot mix '-a' and '-o$OUTPUT'" 1>&2
+          exit 1;;
+  esac
+fi
+
+if [ $DUPLEXCORRECT -eq 1 -a $DUPLEX -eq 0 ]
+then
+  echo -e "\n$progname: use '-c' only with  '-d'" 1>&2
+  exit 1
+fi
+
+if [ $DOUBLE -eq 1 -a $QUADRUPLE -eq 1 ]
+then
+  echo -e "\n$progname: cannot mix '-2' and '-4'" 1>&2
+  exit 1
+fi
+
+
+if [ $DEFAULT -eq 1 ]
+then
+  if [ "$OUTPUT" != "" ]
+  then
+    echo -e "\n$progname: cannot mix '-D' and '-o'" 1>&2
+    exit 1
+  fi
+  PRINTCONF=DEFAULT
+fi
+
+NEWPRINTCONF=`getxtraarg printconf`
+if  [ "$NEWPRINTCONF" = "@" ]
+then
+  usage_configs
+  exit 1
+fi
+
+if  [ "$NEWPRINTCONF" != "" -a "$OUTPUT" != "" ]
+then
+  echo -e "\n$progname: cannot mix '-X printconf=$NEWPRINTCONF' and '-o'" 1>&2
+  exit 1
+fi
+
+PRINTCONF=${NEWPRINTCONF:-$PRINTCONF}
+eval PRINT_CMD='$'${PRINTCONF}'_PRINT_CMD'
+eval PRINTER='$'${PRINTCONF}'_PRINTER'
+eval PRINT_OPTIONS='$'${PRINTCONF}'_PRINT_OPTIONS'
+
+# if REMOVEDUPLEX is already set via -s, i.e., if it is 
+# already set to 1, do not redefine.
+# However, if it is not defined in the printconf at all, set
+# it to 0, otherwise it would be undefined. Note, this is an
+# optional parameter.
+if [ "$REMOVEDUPLEX" != "1" ]
+then
+  eval REMOVEDUPLEX='$'${PRINTCONF}'_REMOVEDUPLEX'
+  if [ "$REMOVEDUPLEX" = "" ]
+  then
+    REMOVEDUPLEX=0
+  fi
+fi
+
+# if SCALE is already set via -Z, i.e., if it is 
+# already set to 1, do not redefine.
+# However, if it is not defined in the printconf at all, set
+# it to 0, otherwise it would be undefined. Note, this is an
+# optional parameter.
+if [ "$SCALE" != "1" ]
+then
+  eval SCALE='$'${PRINTCONF}'_SCALE'
+  if [ "$SCALE" = "" ]
+  then
+    SCALE=0
+  fi
+fi
+
+if [ "$PRINT_CMD" = "" ]
+then
+  echo -e "\n$progname: '$PRINTCONF' is no valid printer configuration" 1>&2
+  exit 1
+fi
+
+if [ $INTERACTIVE -eq 1 -a "$OUTPUT" != "" ]
+then
+  echo -e "\n$progname: cannot mix '-I' and '-o'" 1>&2
+  exit 1
+fi
+
+if [ $CONFIGURATION -eq 1 -a $OPTIND -gt 2 ]
+then
+  echo -e "\n$progname: cannot mix '-C' with any other option" 1>&2
+  exit 1
+fi
+
+if [ $CONFIGURATION -eq 1 -a $# -gt 0 ]
+then
+  echo -e "\n$progname: cannot mix '-C' and input files" 1>&2
+  exit 1
+fi
+
+if [ $CONFIGURATION -eq 1 ]
+then
+  lauch_interactive
+  exit
+fi
+  
+if [ $# -eq 0 ]
+then
+  dothefile - "(stdin)"
+else
+  until [ $# -eq 0 ]
+  do
+    dothefile $1 $1
+    shift
+  done
+fi
+  
+[ $SILENT -eq 0 ] && echo "  ... done"
+
+exit 0
+
+# Local Variables:
+# mode: ksh
+# End:

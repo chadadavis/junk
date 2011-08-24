@@ -1,0 +1,14 @@
+This code compiles under g++ 2.6.2, but exceptions don't
+work there. Consequently use -DNoExceptions on the compilation line.
+Also, for g++, I have not used separate compilation, so
+compile only the main, and other files will be included.
+
+Under CC, compile everything separately.
+On my system, the template directory occasionally
+gets corrupted and must be removed and everything
+recompiled.
+
+Please report bugs to weiss@fiu.edu.
+The AW web page will eventually have a link to
+a page that I will maintain that will contain errata
+and an up-to-date version of the code.

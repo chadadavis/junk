@@ -1,0 +1,9 @@
+AuthType Basic
+<Limit GET POST>
+order deny,allow
+deny from all
+allow from 199.166.210.
+allow from .golden.net
+allow from proxy.aol.com
+allow from fish.wiretap.net
+</Limit>

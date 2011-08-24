@@ -1,0 +1,58 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2004 Mark H. Lyon <mark@marklyon.org>
+#
+# This file is the Mbox & Maildir to Gmail Loader (GML).
+#
+# Mbox & Maildir to Gmail Loader (GML) is free software; you can redistribute
+# it and/or modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2 of
+# the License, or (at your option) any later version.
+#
+# GML is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+# FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+# for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with GML; if not, write to the Free Software Foundation, Inc.,
+# 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+#
+# This entire header must remain intact in any distributed copy.
+
+# Origional development thread at Ars Technica:
+# http://episteme.arstechnica.com/eve/ubb.x?a=tpc&s=50009562&f=6330927813&m=108000474631
+#
+# Version 0.1 - 15 Jun 04 16:28 Supports Mbox
+# Version 0.2 - 15 Jun 04 18:48 Implementing Magus` suggestion for Maildir
+# Version 0.3 - 16 Jun 04 16:17 Implement Rold Gold suggestion for counters
+# Version 0.4 - 17 Jun 04 13:15 Add support for changing SMTP server at command line
+# Version 0.5 - 25 Jun 04 16:00 Implemented GUI and added support for "Sent" mail
+#                               submitted to me by Steven Scott <progoth@gmail.com>
+#                               Special Thanks to: Buddy Fortner, Brian Hodgin,
+#                               Jamie Zawinski, The Youngblood Brass Band, Diet Pepsi,
+#                               and many others for helping in their own way.
+#
+#                               Some of the GUI widgets come from Pmw, which can be
+#                               downloaded at http://pmw.sourceforge.net/
+
+
+I recently was invited to use Google's GMail service by a friend.  As you
+certainly know, Google included an entire gigabyte of storage space with
+the account, which is wonderful for email packrats like me.  I, for instance,
+have all my email dating back from 1994 stored in Netscape.  When I realized
+the benefit of having all my email easily searched and managed through GMail,
+I looked for an option to import my existing messages.  No such feature exists.
+
+To remedy this problem, I've created the Mbox & Maildir to Gmail Loader (GML).
+
+The loader will then send one message every 2 seconds to GMail's servers.
+The delay between messages is to reduce the load sending so many messages
+will certainly create.  Start it running, go to bed, and see the results in
+the morning.  Alternatively, you can sort your messages as they come in.
+
+The messages will not be deleted from your local Mbox file, so you can
+continue to use that as a permanent storage location.  Personally, I have set
+up my mail to be stored on a POP3 server which is downloaded into Mozilla for
+long-term storage and forwarded to GMail for web-based usage.
+
