@@ -1,0 +1,7 @@
+<h1>POST form for accessing the hello-adj-post method</h1>
+<form action="hello-adj" method="post">
+  Adjective: <input type="text" name="adjective" /><br />
+  Adjective: <input type="text" name="adjective" /><br />
+  Adjective: <input type="text" name="adjective" /><br />
+  <input type="submit" value="Submit" />
+</form>
