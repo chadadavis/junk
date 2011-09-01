@@ -2,7 +2,7 @@ package SBG::Catalyst::Demo;
 use Moose;
 use namespace::autoclean;
 
-use Catalyst::Runtime 5.80;
+use Catalyst::Runtime 5.8;
 
 # Set flags and add plugins for the application.
 #

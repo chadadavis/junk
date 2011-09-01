@@ -45,6 +45,15 @@ sub default :Path {
     $c->response->status(404);
 }
 
+use Data::Dumper;
+sub list : Local {
+    my ($self, $c) = @_;
+
+    $c->log->debug(Dumper { some => 1, thing => 2 });
+#     $c->response->body('hello');
+    $c->stash(template => 'some_template.tt');
+}
+
 =head2 end
 
 Attempt to render a view, if needed.

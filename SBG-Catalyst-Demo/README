@@ -1,1 +1,20 @@
-Run script/sbg_catalyst_demo_server.pl to test the application.
+Run 
+
+  script/sbg_catalyst_demo_server.pl to test the application.
+
+See --help for options. For development --debug and --restart are useful
+This will be running on http://0:3000/
+
+
+Or via the newer standard:
+
+  plackup -Ilib *.psgi
+
+Also accepts --reload
+For debugging Catalyst apps, just define CATALYST_DEBUG=1 first:
+
+  CATALYST_DEBUG=1 plackup -Ilib *.psgi
+
+This will be running on http://0:5000/
+
+
