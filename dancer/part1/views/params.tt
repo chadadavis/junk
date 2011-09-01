@@ -1,0 +1,4 @@
+
+[% FOREACH thing in params.keys %]
+   <p>[% thing %] is [% params.$thing %]</p>
+[% END %]

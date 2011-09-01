@@ -1,0 +1,7 @@
+<html>
+<head><title>date_time</title></head>
+<body>
+    <p>Date: [% dt.date %] </p>
+    <p>Time: [% dt.time %] </p>
+</body>
+</html>
