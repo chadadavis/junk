@@ -9,6 +9,7 @@ use Module::Install::Catalyst; # Complain loudly if you don't have
 name 'SBG-Catalyst-Demo';
 all_from 'lib/SBG/Catalyst/Demo.pm';
 
+requires 'Catalyst::Engine::PSGI';
 requires 'Catalyst::Runtime' => '5.90001';
 requires 'Catalyst::Plugin::ConfigLoader';
 requires 'Catalyst::Plugin::Static::Simple';

@@ -26,12 +26,26 @@ The root page (/)
 
 =cut
 
-sub index :Path :Args(0) {
-    my ( $self, $c ) = @_;
+sub index : Path : Args(0) {
+    my ($self, $c) = @_;
 
     # Hello World
-    $c->response->body( $c->welcome_message );
+#     $c->response->body($c->welcome_message);
 }
+
+# But how to link this to the /text URI ? : Local is sufficient
+# Will otherwise look for root/text.tt (based on method name)
+sub text : Local {
+    my ($self, $c) = @_;
+    $c->res->content_type('text/text-plain');
+    # The suggested download file name
+    $c->res->header(
+        'Content-Disposition' => qq(attachment; filename="data.txt"),
+    );
+    $c->res->body("Some text!");
+}
+
+
 
 =head2 default
 

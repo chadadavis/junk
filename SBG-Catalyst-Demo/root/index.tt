@@ -1,0 +1,9 @@
+<!-- wraps this page inside of page.tt , replacing 'content' placeholder -->
+[% WRAPPER page.tt title = c.config.name %]
+
+other stuff
+
+[% END %]
+
+
+
