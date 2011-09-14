@@ -12,3 +12,6 @@ use Config::INI::Reader;
 my $ini = Config::INI::Reader->read_file($ARGV[0]);
 say Dumper $ini;
 
+use Config::IniFiles;
+my $inifile = Config::IniFiles->new(-file => $ARGV[0]);
+say $inifile->val('some_section', 'some_key');
