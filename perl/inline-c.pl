@@ -30,7 +30,9 @@ sub sum {
 
 
 __END__
+# Other languages can be added after the END
 
+# This marker needs to name the language of the following code
 __C__
 
 void count_c(int n) {

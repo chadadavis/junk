@@ -6,7 +6,7 @@ use utf8;
 
 my $var = 'schön';
 
-my $filename = shift || 'filename.txt';
+my $filename = shift || __FILE__ . '.out';
 my $layer = ':encoding(UTF-8)';
 # my $layer = '';
 
