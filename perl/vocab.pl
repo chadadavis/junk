@@ -137,7 +137,8 @@ use List::MoreUtils qw/uniq/;
 # Web dictionaries
 our %langs = (
     'en' => 'http://www.answers.com/',
-#    'de' => 'http://www.dwds.de/?woerterbuch=1&qu=',
+
+    #    'de' => 'http://www.dwds.de/?woerterbuch=1&qu=',
     'de' => 'http://beta.dwds.de/?qu=',
     'fr' => 'http://dictionnaire.tv5.org/dictionnaires.asp?mot=',
     'ia' => 'http://www.interlingua.com/ied/cerca?op=Cerca&edit%5Bkeys%5D=',
@@ -148,15 +149,16 @@ my $opfile = "$ENV{HOME}/.vocab.pl";
 our %ops = _load_ops($opfile);
 
 # Overwrite with any command line ops
-my $result = GetOptions(\%ops,
-                        'h|help',
-                        'b|browser=s',
-                        'd|dict=s',
-                        'e|editor=s',
-                        'f|file=s',
-                        'l|language=s',
-                        'v|verbose!',
-    );   
+my $result = GetOptions(
+    \%ops,
+    'h|help',
+    'b|browser=s',
+    'd|dict=s',
+    'e|editor=s',
+    'f|file=s',
+    'l|language=s',
+    'v|verbose!',
+);
 
 # Save explicit command line options back to file
 _save_ops( $opfile, %ops );
@@ -235,8 +237,8 @@ sub run {
         print green(), $prompt, uncolor();
 
         # -1 busy wait, 0 uses getc(), >0 is a timeout. See Term::ReadKey
-#         while (not defined ($cmd = ReadKey(-1))) {}
-        while (not defined ($cmd = ReadKey(0))) {}
+        #         while (not defined ($cmd = ReadKey(-1))) {}
+        while ( not defined( $cmd = ReadKey(0) ) ) { }
         print blank();
         $entry = process( $cmd, $db, $entry, $file );
     }
@@ -354,7 +356,7 @@ sub show {
         ReadMode 3;
 
         # ReadKey(-1) does busy wait (100% CPU), ReadKey(0) uses getc()
-        while ( not defined ReadKey(0) ) { }
+        while ( not defined( ReadKey(0) ) ) { }
     }
     print blank(), uncolor(), "\t", $db->{$key}{'def'}, "\n";
     return $key;
@@ -509,8 +511,8 @@ sub editor {
 
     show( $db, $key ) if $ops{'v'};
 
-#    return $key;
-    return show($db, $key);
+    #    return $key;
+    return show( $db, $key );
 
 }
 
