@@ -2,13 +2,13 @@
 
 =head1 NAME
 
-B<vocab> - A basic vocabulary testing program
+B<vocab> - A basic vocabulary review program
 
 =head1 SYNOPSIS
 
  vocab ./yourdictionary.csv [ -l(ang) <de|en|fr|ia> ]
 
-    
+
 =head1 DESCRIPTION
 
 Reads a tab-separated text file dictionary of word/gender/definition triples to
@@ -29,11 +29,11 @@ In any case, every line has two tab-separated fields. When editing a definition
 the definition itself may wrap onto subsequent lines. They are automatically
 collapsed into a single line before saving.
 
-    
+
 =head1 OPTIONS
 
 
-=head2 -h|elp 
+=head2 -h|elp
 
 This help
 
@@ -57,7 +57,7 @@ becomes:
 
 Used to allow you to edit your individual definitions.
 
-E.g. for emacs, you might like:    
+E.g. for emacs, you might like:
 
  -e "emacs22-nox -Q +1:80"
 
@@ -122,7 +122,6 @@ Could be using L<DBI::CSV> or L<Tie::CSV_File>
 
 =cut
 
-
 ################################################################################
 
 use strict;
@@ -142,7 +141,7 @@ our %langs = (
     'de' => 'http://beta.dwds.de/?qu=',
     'fr' => 'http://dictionnaire.tv5.org/dictionnaires.asp?mot=',
     'ia' => 'http://www.interlingua.com/ied/cerca?op=Cerca&edit%5Bkeys%5D=',
-    );
+);
 
 # Load any saved ops
 my $opfile = "$ENV{HOME}/.vocab.pl";
@@ -160,7 +159,7 @@ my $result = GetOptions(\%ops,
     );   
 
 # Save explicit command line options back to file
-_save_ops($opfile, %ops);
+_save_ops( $opfile, %ops );
 warn "Options: ", Data::Dump::dump(%ops), "\n" if $ops{'v'};
 
 # Fill in any default ops
@@ -170,25 +169,25 @@ $ops{'d'} ||= $langs{ $ops{'l'} };
 $ops{'e'} ||= $ENV{EDITOR} || 'vi';
 $ops{'f'} ||= "$ENV{HOME}/$ops{'l'}.csv";
 
-warn "Browser: $ops{'b'}\n" if $ops{'v'};
-warn "URL: $ops{'d'}\n" if $ops{'v'};
-warn "Editor: $ops{'e'}\n" if $ops{'v'};
+warn "Browser: $ops{'b'}\n"  if $ops{'v'};
+warn "URL: $ops{'d'}\n"      if $ops{'v'};
+warn "Editor: $ops{'e'}\n"   if $ops{'v'};
 warn "Database: $ops{'f'}\n" if $ops{'v'};
 
 # Check that all ops satisfied
-if ($ops{'h'}) {
-    pod2usage(-exitval=>0, -verbose=>2);
-} elsif (! $ops{'l'}) {
-    pod2usage(-msg=>"-l <language> required", -exitval=>1, -verbose=>1);
+if ( $ops{'h'} ) {
+    pod2usage( -exitval => 0, -verbose => 2 );
+}
+elsif ( !$ops{'l'} ) {
+    pod2usage( -msg => "-l <language> required", -exitval => 1, -verbose => 1 );
 }
 
-warn "Do not know a URL for language: $ops{'l'}\n" if $ops{'v'} && ! $ops{'d'};
+warn "Do not know a URL for language: $ops{'l'}\n" if $ops{'v'} && !$ops{'d'};
 
-my $db = init($ops{'f'});
-run($db, $ops{'f'});
+my $db = init( $ops{'f'} );
+run( $db, $ops{'f'} );
 
 exit;
-
 
 ################################################################################
 
@@ -197,25 +196,27 @@ sub _load_ops {
     local $/ = undef;
     open my $fh, $opfile or return;
     my $content = <$fh>;
-    my %ops = eval $content;
+    my %ops     = eval $content;
     return %ops;
 }
 
 sub _save_ops {
-    my ($opfile, %ops) = @_;
+    my ( $opfile, %ops ) = @_;
+
     # Don't save help option as default
     delete $ops{'h'};
-    
-    if (open my $fh, ">$opfile") {
+
+    if ( open my $fh, ">$opfile" ) {
         print $fh Data::Dump::dump(%ops), "\n";
-    } else {
+    }
+    else {
         warn "Cannot save settings to: $opfile\n";
     }
 }
 
-# Command processors, waits for one-letter keyboard command 
+# Command processors, waits for one-letter keyboard command
 sub run {
-    my ($db, $file) = @_;
+    my ( $db, $file ) = @_;
 
     # Reset terminal before being interrupted
     $SIG{'INT'} = \&quit;
@@ -224,54 +225,65 @@ sub run {
 
     # Current entry
     my $entry;
+
     # Function
     my $cmd;
 
     # Event loop
     while (1) {
-        ReadMode 3; 
+        ReadMode 3;
         print green(), $prompt, uncolor();
+
         # -1 busy wait, 0 uses getc(), >0 is a timeout. See Term::ReadKey
 #         while (not defined ($cmd = ReadKey(-1))) {}
         while (not defined ($cmd = ReadKey(0))) {}
         print blank();
-        $entry = process($cmd, $db, $entry, $file);
+        $entry = process( $cmd, $db, $entry, $file );
     }
 }
 
-
 # Determine which command to dispatch
 sub process {
-    my ($cmd, $db, $key, $file) = @_;
+    my ( $cmd, $db, $key, $file ) = @_;
 
-    if ($cmd eq "\n" || $cmd eq " ") {
+    if ( $cmd eq "\n" || $cmd eq " " ) {
         $key = random($db);
-        $key = show($db, $key, 1);
-    } elsif ($cmd eq "x") {
-        save($db, $file);
+        $key = show( $db, $key, 1 );
+    }
+    elsif ( $cmd eq "x" ) {
+        save( $db, $file );
         quit();
-    } elsif ($cmd eq "d") {
+    }
+    elsif ( $cmd eq "d" ) {
+
         # delete
         if ($key) {
             print blank(), "Deleting $key\n";
             delete $db->{$key};
         }
         $key = undef;
-   } elsif ($cmd eq "l") {
-       # Lookup
-#       $key = lookup($key);
-       $key = lookup();
-    } elsif ($cmd eq "s") {
+    }
+    elsif ( $cmd eq "l" ) {
+
+        # Lookup
+        #       $key = lookup($key);
+        $key = lookup();
+    }
+    elsif ( $cmd eq "s" ) {
+
         # Search
         $key = search($db);
-    } elsif ($cmd eq "e") {
-        #edit 
-        $key = editor($db, $key);
-        save($db, $file) if $key;
-    } else {
+    }
+    elsif ( $cmd eq "e" ) {
+
+        #edit
+        $key = editor( $db, $key );
+        save( $db, $file ) if $key;
+    }
+    else {
         warn "Unrecognized command\n";
     }
-    
+
     # if current DB entry was changed, return new value
     return $key;
 }
@@ -279,14 +291,15 @@ sub process {
 # Open database
 sub init {
     my ($file) = @_;
-    my %db; 
+    my %db;
     our %ops;
-    if (! -r $file) {
-        if (-e $file) {
-            die "Dictionary not readable: $file\n";    
-        } else {
-            open my $fh, ">>$file" or 
-                die "Cannot create dictionary: $file\n";
+    if ( !-r $file ) {
+        if ( -e $file ) {
+            die "Dictionary not readable: $file\n";
+        }
+        else {
+            open my $fh, ">>$file"
+                or die "Cannot create dictionary: $file\n";
             warn "Creating new dictionary at: $file\n" if $ops{'v'};
             return \%db;
         }
@@ -294,36 +307,37 @@ sub init {
 
     open my $fh, "<$file";
     while (<$fh>) {
-        my ($key, $attr, $def) = split /\t/;
+        my ( $key, $attr, $def ) = split /\t/;
         chomp $def;
+
         # Check duplicate
-        if (defined $db{$key}) {
+        if ( defined $db{$key} ) {
             warn blank(), "Appending duplicate: $key\n" if $ops{'v'};
             $db{$key}{'def'} .= ". $def";
-        } else {
+        }
+        else {
             $db{$key}{'def'} = $def;
         }
         $db{$key}{'attr'} ||= $attr;
     }
-    warn "Loaded dictionary with ", scalar(keys %db), " entries\n" if $ops{'v'};
+    warn "Loaded dictionary with ", scalar( keys %db ), " entries\n" if $ops{'v'};
     return \%db;
 }
 
 sub save {
-    my ($db, $file) = @_;
+    my ( $db, $file ) = @_;
     our %ops;
     open my $fh, ">$file";
-    for (sort { lc($a) cmp lc($b) } keys %$db) {
-        print $fh join("\t", $_, $db->{$_}{'attr'}, $db->{$_}{'def'}), "\n";
+    for ( sort { lc($a) cmp lc($b) } keys %$db ) {
+        print $fh join( "\t", $_, $db->{$_}{'attr'}, $db->{$_}{'def'} ), "\n";
     }
     close $fh;
-    warn blank(), "Saved ", scalar(keys(%$db)), " entries\n" if $ops{'v'};
+    warn blank(), "Saved ", scalar( keys(%$db) ), " entries\n" if $ops{'v'};
 }
 
-
-sub show { 
-    my ($db, $key, $pause) = @_;
-    return $key unless defined($key) && exists($db->{$key});
+sub show {
+    my ( $db, $key, $pause ) = @_;
+    return $key unless defined($key) && exists( $db->{$key} );
 
     # Count words reviewed in this review session
     our $counter;
@@ -332,14 +346,15 @@ sub show {
     print yellow();
     print blank();
     printf "%3d %s ", $counter, $key;
-    print(", ", $db->{$key}{'attr'}) if $db->{$key}{'attr'};
+    print( ", ", $db->{$key}{'attr'} ) if $db->{$key}{'attr'};
     print "\n";
 
     if ($pause) {
         print green(), "[ENTER show]: ";
         ReadMode 3;
+
         # ReadKey(-1) does busy wait (100% CPU), ReadKey(0) uses getc()
-        while (not defined (ReadKey(0))) { }
+        while ( not defined ReadKey(0) ) { }
     }
     print blank(), uncolor(), "\t", $db->{$key}{'def'}, "\n";
     return $key;
@@ -350,11 +365,10 @@ sub random {
     my ($db) = @_;
     my @keys = keys(%$db);
     unless (@keys) {
-        warn blank(), 
-        "Dictionary empty, use 's' to search, then 'e' to edit\n" if $ops{'v'};
+        warn blank(), "Dictionary empty, use 's' to search, then 'e' to edit\n" if $ops{'v'};
         return;
     }
-    my $i = int(rand(@keys));
+    my $i = int( rand(@keys) );
     return $keys[$i];
 
 }
@@ -362,9 +376,9 @@ sub random {
 # Launch browser to lookup phrase in on-line dictionary
 sub lookup {
     my ($key) = @_;
-        
+
     our $ops;
-    unless ($ops{'d'}) {
+    unless ( $ops{'d'} ) {
         warn blank(), "Lookup URL not defined\n";
         return;
     }
@@ -375,6 +389,7 @@ sub lookup {
         $key = <STDIN>;
         chomp $key;
     }
+
     # Don't worry about background processes
     local $SIG{'CHLD'} = 'IGNORE';
 
@@ -391,13 +406,14 @@ sub search {
     our @prevhits;
     our $previdx;
     ReadMode 0;
-    print blank(), 
-    "Search for term", 
-    ($prevkey ? " [$prevkey ".($previdx+1)."/".scalar(@prevhits)."]":''), ": ";
+    print blank(),
+        "Search for term",
+        ( $prevkey ? " [$prevkey " . ( $previdx + 1 ) . "/" . scalar(@prevhits) . "]" : '' ), ": ";
     my $key = <STDIN>;
     chomp $key;
+
     if ($key) {
-        $previdx = 0;
+        $previdx  = 0;
         @prevhits = ();
     }
     $key ||= $prevkey;
@@ -405,85 +421,93 @@ sub search {
     $prevkey = $key;
 
     unless (@prevhits) {
+
         # Exact matches
-        push @prevhits, grep { /^$key$/ } keys %$db;
+        push @prevhits, grep {/^$key$/} keys %$db;
+
         # Case insensitive
-        push @prevhits, grep { /^$key$/i } keys %$db;
+        push @prevhits, grep {/^$key$/i} keys %$db;
+
         # Unanchored Regex
-        push @prevhits, grep { /$key/i } keys %$db;
+        push @prevhits, grep {/$key/i} keys %$db;
         @prevhits = List::MoreUtils::uniq @prevhits;
     }
     unless (@prevhits) {
         warn "\"$key\" not found\n";
         $prevkey = undef;
+
         # Remove funky chars
         $key =~ s/[\^\$]//g;
         return lookup($key);
     }
-    print "Result ", $previdx+1, " of ", scalar(@prevhits), "\n";
+    print "Result ", $previdx + 1, " of ", scalar(@prevhits), "\n";
     my $found = $prevhits[$previdx];
     $previdx++;
-    unless ($previdx < @prevhits) {
-        $previdx = 0;
+    unless ( $previdx < @prevhits ) {
+        $previdx  = 0;
         @prevhits = ();
-        $prevkey = undef;
+        $prevkey  = undef;
     }
-    return show($db, $found);
+    return show( $db, $found );
 }
-
 
 # Allows editing of an entry, whether it exists yet or not
 sub editor {
-    my ($db, $key) = @_;
+    my ( $db, $key ) = @_;
     our $ops;
 
     unless ($key) {
         warn "\nTry [s]earching for an entry first\n";
         return search($db);
     }
-    
-    # Write query/existing line to a temp file
-    my ($fh, $name) = tempfile();
 
-    if ($db->{$key}) {
-        print $fh join("\t", $key, $db->{$key}{'attr'}, $db->{$key}{'def'});
-    } else {
+    # Write query/existing line to a temp file
+    my ( $fh, $name ) = tempfile();
+
+    if ( $db->{$key} ) {
+        print $fh join( "\t", $key, $db->{$key}{'attr'}, $db->{$key}{'def'} );
+    }
+    else {
         print $fh "$key\t\t";
     }
     close $fh;
 
     # Launch editor on temp file
     system("$ops{'e'} $name");
-    
+
     # Re-open file
     open $fh, "<$name";
+
     # Get first line
     my $line = <$fh>;
     chomp $line;
+
     # Parse in to 3 tab-separated blocks
-    my ($k, $attr, $def) = split/\t/, $line;
-    unless (defined($def)) {
-        warn 
+    my ( $k, $attr, $def ) = split /\t/, $line;
+    unless ( defined($def) ) {
+        warn
             "Need 3 tab-separated fields: phrase, case, definition\n",
-            "Try editing again\n"; 
-        return $key; 
+            "Try editing again\n";
+        return $key;
     }
+
     # Suck up any remaining lines, these belong to definition
     my @lines = <$fh>;
     chomp for @lines;
     close $fh;
 
     # Remove blank lines
-    @lines = grep { $_ } @lines;
+    @lines = grep {$_} @lines;
+
     # Append any other lines to definition
-    $def = join(" ", ($def, @lines));
+    $def = join( " ", ( $def, @lines ) );
     chomp $def;
 
     # Save entry
     $db->{$k}{'attr'} = $attr;
-    $db->{$k}{'def'} = $def;
+    $db->{$k}{'def'}  = $def;
 
-    show($db, $key) if $ops{'v'};
+    show( $db, $key ) if $ops{'v'};
 
 #    return $key;
     return show($db, $key);
