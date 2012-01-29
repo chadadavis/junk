@@ -2,8 +2,6 @@ use 5.14.1;
 use IO::Prompt;
 use List::Util qw(shuffle);
 
-# New stuff
-
 sub deal {
     state $shoe = [
         shuffle map {
