@@ -9,6 +9,7 @@ $|=1;
 my $a = [0..19];
 
 sub doit {
+    # One incompatible change
     my ($x) = @_;
     for (my $i = 0; $i < 10000000; $i++) { }
     print ".";
