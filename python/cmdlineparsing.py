@@ -19,12 +19,12 @@ parser.add_option("--debug",
 (options, args) = parser.parse_args()
 mydict = {1: 1, 2: 2}
 
-print "Options: ", options, " Args: ", args, "\n"
+print("Options: ", options, " Args: ", args, "\n")
 
 
 	
 if options.plot_filename:
-	print "yes"
+	print("yes")
 
 #if options["plot_filename"]:
 #	print options["plot_filename"]
@@ -50,7 +50,7 @@ else:
 #something[0] += 1
 something[1] = 1
 
-print something.keys()
+print(something.keys())
 
 
 		
