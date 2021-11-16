@@ -2,36 +2,27 @@
 
 # TODO
 # Note (*) which have all letters, if any
-# Count number of items, just number the output
-# Use OptionParser to note order of args
-
-import sys
-from pprint import pprint
-import re
-
-def pvars(_extra:dict=None):
-    """Also pass pp(vars()) from inside a def"""
-    _vars = { **globals(), **locals(), **(_extra if _extra else {}) }
-    pprint([ [k,_vars[k]] for k in _vars if re.match(r'[a-z]', k)])
 
 from optparse import OptionParser
+
+DICT_FILE = '/usr/share/dict/american-english'
+MIN_LEN = 4
+
 parser = OptionParser()
+parser.add_option("-r", "--required", dest="required",
+    help="A letter that is required in every partial anagram",
+)
+
 (options, args) = parser.parse_args()
+if not args:
+    parser.print_usage()
+    exit(1)
 
+alphabet = args[0]
+required = options.required or ""
 
-# letters = 'marjorly'
-# required = 'y'
-
-# letters = 'modehut'
-# required = 'h'
-
-alphabet = (args and args[0]) or "marjorl"
-required = (args and args[1]) or "y"
-
-if required not in alphabet:
+if required and required not in alphabet:
     alphabet += required
-
-print(",".join(alphabet))
 
 def validate_word(word, alphabet):
     for letter in word:
@@ -39,14 +30,17 @@ def validate_word(word, alphabet):
             return False
     return True
 
-file = open('/usr/share/dict/american-english')
+file = open(DICT_FILE)
+count = 0
 for word in file:
     word = word.strip()
-    if len(word) < 4:
+    if len(word) < MIN_LEN:
         continue
-    if required not in word:
-       continue
+    if required and required not in word:
+        continue
     if not validate_word(word, alphabet):
         continue
-    print(word)
+    count += 1
+    print(f"{count:3d} {word}")
+
 
