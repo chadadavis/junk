@@ -1,10 +1,14 @@
 #!/usr/bin/env python
 
 # TODO
-# Note (*) which have all letters, if any
+# Link to FreeDictionary for language?
+# Allow other dictionaries/langs?
+# Option to require full-length matches
 
 from optparse import OptionParser
 
+# DICT_FILE = '/usr/share/dict/british-english'
+# DICT_FILE = '/usr/share/dict/cracklib-small'
 DICT_FILE = '/usr/share/dict/american-english'
 MIN_LEN = 4
 
@@ -24,11 +28,20 @@ required = options.required or ""
 if required and required not in alphabet:
     alphabet += required
 
-def validate_word(word, alphabet):
+
+def is_valid_word(word, alphabet):
     for letter in word:
         if letter not in alphabet:
             return False
     return True
+
+
+def is_complete_word(word, alphabet):
+    for letter in alphabet:
+        if letter not in word:
+            return False
+    return True
+
 
 file = open(DICT_FILE)
 count = 0
@@ -38,9 +51,10 @@ for word in file:
         continue
     if required and required not in word:
         continue
-    if not validate_word(word, alphabet):
+    if not is_valid_word(word, alphabet):
         continue
     count += 1
-    print(f"{count:3d} {word}")
+    complete = '*' if is_complete_word(word, alphabet) else ' '
+    print(f"{count:3d} {complete} {word}")
 
 
