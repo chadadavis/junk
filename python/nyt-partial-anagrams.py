@@ -1,15 +1,20 @@
 #!/usr/bin/env python
 
 # TODO
-# Link to FreeDictionary for language?
-# Allow other dictionaries/langs?
-# Option to require full-length matches
+# Link to FreeDictionary definition for language?
+#   Rather, make 'ankia' a library, and call it to fetch/render a def
+#   Or use https://github.com/Max-Zhenzhera/python-freeDictionaryAPI/
+# Find/Allow other dictionaries/langs? Rather, concat multiple dicts.
+# Option to require full-length matches?
+# Fetch word freqs (Google n-gram viewer API?)
+# Generate puzzles, or find more easier/harder ones
 
 from optparse import OptionParser
 
 # DICT_FILE = '/usr/share/dict/british-english'
 # DICT_FILE = '/usr/share/dict/cracklib-small'
 DICT_FILE = '/usr/share/dict/american-english'
+
 MIN_LEN = 4
 
 parser = OptionParser()
@@ -56,5 +61,4 @@ for word in file:
     count += 1
     complete = '*' if is_complete_word(word, alphabet) else ' '
     print(f"{count:3d} {complete} {word}")
-
 
