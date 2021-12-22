@@ -4,7 +4,7 @@
 # Link to FreeDictionary definition for language?
 #   Rather, make 'ankia' a library, and call it to fetch/render a def
 #   Or use https://github.com/Max-Zhenzhera/python-freeDictionaryAPI/
-# Find/Allow other dictionaries/langs? Rather, concat multiple dicts.
+# Find/Allow other dictionaries/langs? Rather, check/dedupe multiple dicts.
 # Option to require full-length matches?
 # Fetch word freqs (Google n-gram viewer API?)
 # Generate puzzles, or find more easier/harder ones
