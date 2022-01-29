@@ -1,15 +1,13 @@
 #!/usr/bin/env python
 
-# TODO
-# Link to FreeDictionary definition for language?
-#   Rather, make 'ankia' a library, and call it to fetch/render a def
-#   Or use https://github.com/Max-Zhenzhera/python-freeDictionaryAPI/
-# Find/Allow other dictionaries/langs? Rather, check/dedupe multiple dicts.
-# Option to require full-length matches?
-# Fetch word freqs (Google n-gram viewer API?)
-# Generate puzzles, or find more easier/harder ones
+# Backlog:
+# Find/Allow other dictionaries/langs. Rather, check/dedupe multiple dicts.
+# Option to require full-length matches.
+# Generate puzzles, or find more easier/harder ones.
 
+import subprocess
 from optparse import OptionParser
+from wordfreq import zipf_frequency
 
 # DICT_FILE = '/usr/share/dict/british-english'
 # DICT_FILE = '/usr/share/dict/cracklib-small'
@@ -60,5 +58,19 @@ for word in file:
         continue
     count += 1
     complete = '*' if is_complete_word(word, alphabet) else ' '
-    print(f"{count:3d} {complete} {word}")
 
+    # This puts two scores on a (roughly) 1-100 scale
+    l = 10 * len(word)
+    # Use an inverse frequency to give more 'difficulty' points for less common words.
+    freq = 100 / (zipf_frequency(word, 'en') or 1)
+    # And (equally weighed) average them
+    difficulty = (freq + l) / 2
+
+    # This sed command strips off the first two header lines from the output
+    # And the ' ... || true' makes this actually *not* check the return code for success,
+    # since no definition is also fine.
+    definition = subprocess.check_output(f'dict -f -d wn {word} 2>/dev/null|sed -e1,2d|xargs 2>/dev/null || true', shell=True)
+    definition = definition.decode('utf-8')
+    definition = definition.strip()
+    definition = definition[:200]
+    print(f"{count:3d} {freq:3.0f} {l:3.0f} {difficulty:3.0f} {complete:1s} {word:20s} {definition:s}")
