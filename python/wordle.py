@@ -4,35 +4,11 @@
 # https://www.nytimes.com/games/wordle/index.html
 
 # Backlog:
-
-# Maintain a list of remaining eligible N=5-letter words.
-# After each guess, there might be:
-#   green letters to filter in (by pos)
-#   yellow letters to filter in (anywhere)
-#   grey letters to filter out
-#   But, grey letters could also be duplicates, don't filter them all out.
-
+# Search for TODO below
 # Be smarter about duplicates
+# Make this interactive, and:
+#   Print top N=20 recommended guesses each iteration
 
-# Print top N recommended guesses each iteration
-# Score recommended words based on letter freqs, word freqs, and combined
-
-# maintain a dict to filter when:
-#   dict(letter in any pos, list)
-#      For keeping words, when we find a yellow (elsewhere) letter
-#      And for excluding words when we find a grey (nowhere) letter
-#   2D lookup for each letter in each pos, from existing words
-#     (for when we guess a letter in the right pos):
-#     dict(dict(pos, letter))
-#  Duplicate letters: need to keep track; don't dump them all together
-# Reduce the list based on found constraints.
-
-# Keep track of counts of duplicate letters (don't lump them together).
-# From Wikipedia:
-# Multiple instances of the same letter in a guess, such as the "o"s
-# in "robot", will be colored green or yellow only if the letter also appears
-# multiple times in the answer; otherwise, excess repeating letters will be
-# colored gray.
 
 # Learn:
 # Log previous wordle words, daily:
@@ -40,15 +16,22 @@
 #   What's the distribution of word frequencies of past words. Very frequent words excluded?
 #   Are any POS excluded? (e.g. do they include boring pronouns like "their" ?)
 
-# Tests:
-# sauce => [caulk]
-# others => s(c)(a)ry => [c][a]ndy => [c][a]ped => [c][a]rry => ? => [caulk]
+# Regarding duplicates: (From Wikipedia):
+# Multiple instances of the same letter in a guess, such as the "o"s
+# in "robot", will be colored green or yellow only if the letter also appears
+# multiple times in the answer; otherwise, excess repeating letters will be
+# colored gray (and it's *not* sequential, could have gray 'o' before green 'o')
 
-# TODO test dupes, like 'canal'
-
-# Checkout strategy suggestions published by others
+# Checkout strategy suggestions published by others:
 # https://slate.com/technology/2022/01/wordle-how-to-win-strategy-crossword-experts.html
-# https://www.vulture.com/2022/01/wordle-tips-tricks.html
+#   Alt strategy: maximize information gain of guess by not always including required letters.
+
+#   'According to our analysis, almost exactly one-third of Wordle solutions
+#   contain at least one duplicated letter—this is worth keeping in mind,
+#   regardless of your strategy.
+
+
+# Tests:
 
 from optparse import OptionParser
 from wordfreq import zipf_frequency
@@ -84,6 +67,7 @@ def score_letters(word):
 # or try something like: import letter_frequency_languages
 # And Look at letter frequencies by position (in 5-letter-word), not just globally
 # TODO just derive this from our own dictionary
+# TODO maybe also useful: track the 'specificity' of each letter (ability to exclude max words)
 letter_freq = {
     'e': 0.13000,
     't': 0.09100,
@@ -162,8 +146,10 @@ parser.add_option("-d", "--dictionary", dest="DICT_FILE",
 #   6-7 There are no *additional* 'a' letters (i.e. just the previously found)
 #   8-9 There's an (or more) 'l', but not at pos 5
 
-blacklist_words = set()
+# This basically implements hard-mode by default, where confirmed letters are subsequently required.
 required_letters = set()
+blacklist_words = set()
+
 for guess in args:
     # Note if a letter was never seen (and no later positions), as then 'grey' means not present at all
     letter_maybe_del = set()
@@ -224,6 +210,8 @@ for letter in lookup:
 remaining = remaining - blacklist_words
 
 # TODO sort by whichever score
+# Else:
+# | sort -k 4 -n -r
 for word in remaining:
     # Word freq
     word_score = zipf_frequency(word, 'en')
