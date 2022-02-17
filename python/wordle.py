@@ -1,11 +1,21 @@
 #!/usr/bin/env python
 
-# Go through whole dictionary, save only N=5-letter words
-# Keep a backlog of possible words left, print top few each iteration
-# Score word based on letter freqs and word freqs (combined)
-#  They seem to also avoid obscure words
-#  But, strategically obscure words with high letter freqs might be informative
-#  So, maybe print two lists, with top words for guessing letters, and separately for top letters (left)
+# https://en.wikipedia.org/wiki/Wordle
+# https://www.nytimes.com/games/wordle/index.html
+
+# Backlog:
+
+# Maintain a list of remaining eligible N=5-letter words.
+# After each guess, there might be:
+#   green letters to filter in (by pos)
+#   yellow letters to filter in (anywhere)
+#   grey letters to filter out
+#   But, grey letters could also be duplicates, don't filter them all out.
+
+# Be smarter about duplicates
+
+# Print top N recommended guesses each iteration
+# Score recommended words based on letter freqs, word freqs, and combined
 
 # maintain a dict to filter when:
 #   dict(letter in any pos, list)
@@ -14,27 +24,50 @@
 #   2D lookup for each letter in each pos, from existing words
 #     (for when we guess a letter in the right pos):
 #     dict(dict(pos, letter))
-#  Duplicate letters: test it, but should be automatic
+#  Duplicate letters: need to keep track; don't dump them all together
 # Reduce the list based on found constraints.
 
+# Keep track of counts of duplicate letters (don't lump them together).
+# From Wikipedia:
+# Multiple instances of the same letter in a guess, such as the "o"s
+# in "robot", will be colored green or yellow only if the letter also appears
+# multiple times in the answer; otherwise, excess repeating letters will be
+# colored gray.
 
+# Learn:
+# Log previous wordle words, daily:
+#   Exclude (recent) past words from guesses, or flag them, with an age, eg 23w (old)
+#   What's the distribution of word frequencies of past words. Very frequent words excluded?
+#   Are any POS excluded? (e.g. do they include boring pronouns like "their" ?)
 
-# Backlog:
-# Look at letter frequencies by position (in 5-letter-word) as well
+# Tests:
+# sauce => [caulk]
+# others => s(c)(a)ry => [c][a]ndy => [c][a]ped => [c][a]rry => ? => [caulk]
 
-# Find/Allow other dictionaries/langs. Rather: check/dedupe multiple dicts.
+# TODO test dupes, like 'canal'
 
-import subprocess
+# Checkout strategy suggestions published by others
+# https://slate.com/technology/2022/01/wordle-how-to-win-strategy-crossword-experts.html
+# https://www.vulture.com/2022/01/wordle-tips-tricks.html
+
 from optparse import OptionParser
 from wordfreq import zipf_frequency
-# import letter_frequency_languages
 
-# DICT_FILE = '/usr/share/dict/british-english'
-# DICT_FILE = '/usr/share/dict/cracklib-small'
-# DICT_FILE = '/usr/share/dict/american-english'
+# Generate dict:
+#   en-us
+#   5-letter words
+#   no proper nouns (no initial capitals: Tonya, Tokyo, Timex, Texas, etc)
+#   no contractions (e.g. "it'll")
+#   only alpha (no accents, e.g. "mêlée")
+# =~ 4600 words
+# cat /usr/share/dict/american-english |grep '^.....$' |grep -v '^[A-Z]' |grep -v "'" | LANG=C grep '^[a-z]*$' |sort |uniq > english-lower-len-5.dict
+
+LEN = 5
 DICT_FILE = './english-lower-len-5.dict'
 
 def score_letters(word):
+    """For choosing candidate starting words, based on common letter frequencies"""
+
     score = 0.0
     used = set()
     for letter in word:
@@ -45,17 +78,12 @@ def score_letters(word):
         used.add(letter.lower())
     return score
 
-parser = OptionParser()
-parser.add_option("-d", "--dictionary", dest="DICT_FILE",
-    help="Dictionary file",
-)
 
-(options, args) = parser.parse_args()
-
-# if not args:
-#     parser.print_usage()
-#     exit(1)
-
+# TODO: update with one that has a proper/recent citation
+# https://en.wikipedia.org/wiki/Letter_frequency
+# or try something like: import letter_frequency_languages
+# And Look at letter frequencies by position (in 5-letter-word), not just globally
+# TODO just derive this from our own dictionary
 letter_freq = {
     'e': 0.13000,
     't': 0.09100,
@@ -86,12 +114,99 @@ letter_freq = {
 }
 
 
+# Collect indexes to find words matching certain criteria.
+# This is a dict[list[set[]]]
+# The dict tracks the letters
+# The list tracks what position the letter is in (0 for wildcard/yellow position)
+# The set tracks the words that meet that criteria.
+# So, the [0] set of words is all the words that have the letter at any position.
+# candidates['y'][0] contains 'word' # means the letter is in the word
+# candidates['y'][2] contains 'word' # means the letter is the second letter in the word
+
+lookup = dict()
+
+# Build starting list
 file = open(DICT_FILE)
 count = 0
+
 for word in file:
     word = word.strip()
     count += 1
 
+    for pos, letter in enumerate(word):
+        lookup[letter]    = lookup.get(letter) or [ set() for i in range(LEN+1) ]
+        # Note, this word is a candidate for (yellow/wildcard) letter, pos 0
+        # lookup[letter][0] = lookup[letter][0] or set()
+        # lookup[letter][0].add(word)
+
+        # Note, this word is a candidate for (green, positioned) letter (1-based)
+        lookup[letter][pos+1].add(word)
+
+parser = OptionParser()
+parser.add_option("-d", "--dictionary", dest="DICT_FILE",
+    help="Dictionary file",
+)
+
+(options, args) = parser.parse_args()
+
+# TODO DEL
+# args = args or ['s-a+u+c*e-', 'a*p-p-l*e-']
+
+# The remaining args are previous guesses, if any
+
+# The syntax/encoding for the response to each previous guess response looks like eg:
+#   c+a*n-a-l*
+# Which means (0-based index of these chars):
+#   0-1 There's a 'c' at pos 1 (and maybe elsewehere?)
+#   2-3 There's an (or more) 'a' but not at pos 2 (pos 2 out of 5, 1-based)
+#   4-5 There is no 'n'
+#   6-7 There are no *additional* 'a' letters (i.e. just the previously found)
+#   8-9 There's an (or more) 'l', but not at pos 5
+
+blacklist = set()
+for guess in args:
+    # Note if a letter was never seen, as then 'grey' means not present at all
+    letter_seen = set()
+    for pos in range(LEN):
+        letter = guess[pos*2]
+        op     = guess[pos*2+1]
+
+        # Note, the below [pos+1] syntax is because 1-based counting in the target word
+        if op == '+':
+            # Letter is present, at this position.
+            # But maybe also at other positions ... so, don't delete those yet.
+            # However, no *other* letter is at *this* pos, so delete all of those.
+            for l in lookup:
+                if l != letter:
+                    blacklist = blacklist | lookup[l][pos+1]
+                    lookup[l][pos+1] = set()
+        if op == '*':
+            # Letter is still a candidate, but not at this pos.
+            # Might still have (multiple) occurrences elsewhere.
+            blacklist = blacklist | lookup[letter][pos+1]
+            lookup[letter][pos+1] = set()
+        if op == '-':
+            # Letter is not present in this position.
+            blacklist = blacklist | lookup[letter][pos+1]
+            lookup[letter][pos+1] = set()
+            # Letter has no (more) occurrences (i.e. 0 total, if it's first-seen)
+            if letter not in letter_seen:
+                for s in lookup[letter]:
+                    blacklist = blacklist | s
+                lookup[letter] = [ set() for i in range(LEN+1)]
+
+        letter_seen.add(letter)
+
+# Go over remaining candidates and score them
+remaining = set()
+for letter in lookup:
+    for pos in range(LEN):
+        remaining = remaining | lookup[letter][pos+1]
+
+remaining = remaining - blacklist
+
+# TODO sort by whichever score
+for word in remaining:
     # Word freq
     word_score = zipf_frequency(word, 'en')
 
@@ -102,3 +217,5 @@ for word in file:
     combined_score = 10 * letter_score + word_score
 
     print(f"#{count:04d} {letter_score:5.2f} {word_score:5.2f} {combined_score:5.2f} {word:20s}")
+
+print()
