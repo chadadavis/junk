@@ -149,10 +149,9 @@ parser.add_option("-d", "--dictionary", dest="DICT_FILE",
 
 (options, args) = parser.parse_args()
 
-# TODO DEL
-# args = args or ['s-a+u+c*e-', 'a*p-p-l*e-']
-
 # The remaining args are previous guesses, if any
+# TODO DEL tests ...
+# args = args or ['s-c+a*r-y-']
 
 # The syntax/encoding for the response to each previous guess response looks like eg:
 #   c+a*n-a-l*
@@ -163,10 +162,11 @@ parser.add_option("-d", "--dictionary", dest="DICT_FILE",
 #   6-7 There are no *additional* 'a' letters (i.e. just the previously found)
 #   8-9 There's an (or more) 'l', but not at pos 5
 
-blacklist = set()
+blacklist_words = set()
+required_letters = set()
 for guess in args:
-    # Note if a letter was never seen, as then 'grey' means not present at all
-    letter_seen = set()
+    # Note if a letter was never seen (and no later positions), as then 'grey' means not present at all
+    letter_maybe_del = set()
     for pos in range(LEN):
         letter = guess[pos*2]
         op     = guess[pos*2+1]
@@ -174,36 +174,54 @@ for guess in args:
         # Note, the below [pos+1] syntax is because 1-based counting in the target word
         if op == '+':
             # Letter is present, at this position.
+            required_letters.add(letter)
             # But maybe also at other positions ... so, don't delete those yet.
+            ...
             # However, no *other* letter is at *this* pos, so delete all of those.
             for l in lookup:
                 if l != letter:
-                    blacklist = blacklist | lookup[l][pos+1]
+                    blacklist_words = blacklist_words | lookup[l][pos+1]
                     lookup[l][pos+1] = set()
         if op == '*':
             # Letter is still a candidate, but not at this pos.
             # Might still have (multiple) occurrences elsewhere.
-            blacklist = blacklist | lookup[letter][pos+1]
+            blacklist_words = blacklist_words | lookup[letter][pos+1]
             lookup[letter][pos+1] = set()
+            # This letter is now required at some/any other pos
+            required_letters.add(letter)
         if op == '-':
-            # Letter is not present in this position.
-            blacklist = blacklist | lookup[letter][pos+1]
+            # Letter is not present in this position
+            blacklist_words = blacklist_words | lookup[letter][pos+1]
             lookup[letter][pos+1] = set()
-            # Letter has no (more) occurrences (i.e. 0 total, if it's first-seen)
-            if letter not in letter_seen:
-                for s in lookup[letter]:
-                    blacklist = blacklist | s
-                lookup[letter] = [ set() for i in range(LEN+1)]
 
-        letter_seen.add(letter)
+            # Letter *maybe* not present at any other position, but maybe *later* in the word:
+            # (Apparently the green letters take priority over the yellow/grey letters).
+            letter_maybe_del.add(letter)
+            # If letter has no (more) occurrences (including *later* occurrences):
+            # Counter-example: target 'shake', but given 's+e-r-v-e+' (clearly not sequential)
+            # Because the 'e' in pos 2 is grey, even before the (green) 'e' at pos 5 was processed.
+
+    # After checking each pos for each letter, which were grey once, but otherwise not green later:
+    for letter in letter_maybe_del:
+        # Did we then find it later as a '*' or '+' letter?
+        if letter not in required_letters:
+            # Then blacklist all those words with this letter anywhere
+            for s in lookup[letter]:
+                blacklist_words = blacklist_words | s
+            lookup[letter] = [ set() for i in range(LEN+1)]
 
 # Go over remaining candidates and score them
 remaining = set()
 for letter in lookup:
     for pos in range(LEN):
         remaining = remaining | lookup[letter][pos+1]
+        # Really not efficient, but we need to ensure that wildcard letters present:
+        for w in lookup[letter][pos+1]:
+            for l in required_letters:
+                if l not in w:
+                    blacklist_words.add(w)
 
-remaining = remaining - blacklist
+remaining = remaining - blacklist_words
 
 # TODO sort by whichever score
 for word in remaining:
