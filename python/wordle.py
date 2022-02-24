@@ -97,6 +97,7 @@ letter_freq = {
 }
 
 parser = OptionParser()
+parser.add_option('--top',        type='int',          help="Show top N=15 candidates each round", default=15)
 parser.add_option('--length',     type='int',          help="Length of all words, default 5", default=5)
 parser.add_option('--target',     type='string',       help="Set the target word, e.g. to test")
 parser.add_option('--random',     action='store_true', help="Pick a random target, for you to play locally. Else assume unknown.")
@@ -154,6 +155,47 @@ required_letters = set()
 blacklist_words = set()
 
 while True:
+
+    # Go over remaining candidates
+    remaining = set()
+    for letter in lookup:
+        for pos in range(LEN):
+            remaining = remaining | lookup[letter][pos+1]
+            # Really not efficient, but we need to ensure that wildcard letters present:
+            for w in lookup[letter][pos+1]:
+                for l in required_letters:
+                    if l not in w:
+                        blacklist_words.add(w)
+
+    remaining = remaining - blacklist_words
+    if not remaining:
+        print('None')
+        # TODO wrap this in main() and return rather than exit
+        exit()
+
+    scores = dict()
+    for word in remaining:
+        # Word freq. Note, this just makes the word more likely to be in the Wordle
+        # dictionary, since there's some threshold for excluding less common words.
+        # However, given two words in the dictionary, that one is twice as frequent
+        # as the other doesn't mean it's more likely to be the target word.
+        by_word = zipf_frequency(word, 'en')
+
+        # Sum of freq of (unique) letters
+        by_letter = score_letters(word)
+
+        # A slightly more comparable scale:
+        by_combined = 10 * by_letter + by_word
+
+        scores[word] = { 'word': word, 'by_word': by_word, 'by_letter': by_letter, 'by_combined': by_combined, }
+
+    # Sort for top N objs by key
+    scores = sorted(scores.values(), key=itemgetter('by_combined'), reverse=True)
+    print(f"{'lett':>5} {'word':>5} {'combo':>5}")
+
+    for s in scores[:options.top]:
+        print(f"{s['by_letter']:5.2f} {s['by_word']:5.2f} {s['by_combined']:5.2f} {s['word']:20s}")
+
     # The syntax/encoding for the response to each previous guess response looks like eg:
     #   c+a*n-a-l*
     # Which means (0-based index of these chars):
@@ -211,37 +253,4 @@ while True:
                 blacklist_words = blacklist_words | s
             lookup[letter] = [ set() for i in range(LEN+1)]
 
-    # Go over remaining candidates
-    remaining = set()
-    for letter in lookup:
-        for pos in range(LEN):
-            remaining = remaining | lookup[letter][pos+1]
-            # Really not efficient, but we need to ensure that wildcard letters present:
-            for w in lookup[letter][pos+1]:
-                for l in required_letters:
-                    if l not in w:
-                        blacklist_words.add(w)
-
-    remaining = remaining - blacklist_words
-
-    scores = dict()
-    for word in remaining:
-        # Word freq. Note, this just makes the word more likely to be in the Wordle
-        # dictionary, since there's some threshold for excluding less common words.
-        # However, given two words in the dictionary, that one is twice as frequent
-        # as the other doesn't mean it's more likely to be the target word.
-        by_word = zipf_frequency(word, 'en')
-
-        # Sum of freq of (unique) letters
-        by_letter = score_letters(word)
-
-        # A slightly more comparable scale:
-        by_combined = 10 * by_letter + by_word
-
-        scores[word] = { 'word': word, 'by_word': by_word, 'by_letter': by_letter, 'by_combined': by_combined, }
-
-    # Sort for top N objs by key
-    scores = sorted(scores.values(), key=itemgetter('by_combined'), reverse=True)
-    for s in scores[:10]:
-        print(f"{s['by_letter']:5.2f} {s['by_word']:5.2f} {s['by_combined']:5.2f} {s['word']:20s}")
 
