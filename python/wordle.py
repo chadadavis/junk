@@ -6,11 +6,6 @@
 # Backlog:
 # Search for TODO below
 
-# Option to test against a given target word arg
-
-# Option to play, where a random target is chosen, but not revealed
-# User is prompted for guesses
-
 # Option to autoplay, where random target is chosen, and then iterates itself.
 # Guesses just based on the #1 ranked word (optimize that later ...)
 
@@ -131,15 +126,22 @@ lookup = dict()
 
 file = open(options.dict)
 num_words = 0
+target_found = False
 
 for word in file:
     num_words += 1
     word = word.strip()
+    if options.target and options.target == word:
+        target_found = True
     for pos, letter in enumerate(word):
         lookup[letter]    = lookup.get(letter) or [ set() for i in range(LEN+1) ]
 
         # Note, this word is a candidate for (green, positioned) letter (1-based)
         lookup[letter][pos+1].add(word)
+
+if options.target and not target_found:
+    print(f"Target ({options.target}) doesn't exist in dictionary")
+    exit()
 
 if not options.target and options.random:
     # To get a random word, seek back to the right pos in file
@@ -153,6 +155,8 @@ file.close()
 # This basically implements hard-mode by default, where confirmed letters are subsequently required.
 required_letters = set()
 blacklist_words = set()
+guesses_n = 0
+guess = ''
 
 while True:
 
@@ -170,7 +174,13 @@ while True:
     remaining = remaining - blacklist_words
     if not remaining:
         print('None')
-        # TODO wrap this in main() and return rather than exit
+        exit()
+
+    # This is a bit redundant.
+    # If you're playing an external game, you already know you've won.
+    # But, for completeness, this amounts to entering '+++++' here, as your victory lap.
+    if len(remaining) == 1 and guess and guess in remaining:
+        print(f"Found in {guesses_n} tries")
         exit()
 
     scores = dict()
@@ -196,6 +206,44 @@ while True:
     for s in scores[:options.top]:
         print(f"{s['by_letter']:5.2f} {s['by_word']:5.2f} {s['by_combined']:5.2f} {s['word']:20s}")
 
+    # TODO make 'guess' and 'reply' separate strings (same len); no need to encode them together; it's confusing
+    reply = ''
+    # TODO wrap in a validation loop,
+    # Check eg for options.length, and valid chars, in (filtered) dictionary, etc
+    guesses_n += 1
+    guess = input(f"Guess {guesses_n:2d}: ")
+
+    # Each letter in the reply has a corresponding operator code: exact (+), wild (*), miss (-)
+    reply_ops = [ None for i in range(options.length) ]
+
+    if options.target:
+        # For tracking duplicate letters in target and guess
+        remaining_letters = dict()
+        for l in options.target:
+            remaining_letters[l] = remaining_letters.get(l) or 0
+            remaining_letters[l] += 1
+
+        # Just looking for exact matches in the first iteration.
+        # This is because we need to prioritize scoring exact matches (+) before wilds (*).
+        for pos, l in enumerate(guess):
+            if l == options.target[pos]:
+                reply_ops[pos] = '+'
+                remaining_letters[l] -= 1
+
+        # Now see if there are any duplicate chars left in target for any wild matches (*)
+        for pos, l in enumerate(guess):
+            if reply_ops[pos]:
+                # Already had an exact match
+                continue
+            elif l in remaining_letters and remaining_letters[l] > 0:
+                reply_ops[pos] = '*'
+                remaining_letters[l] -= 1
+            else:
+                reply_ops[pos] = '-'
+
+        for pos, op in enumerate(reply_ops):
+            reply += guess[pos] + op
+
     # The syntax/encoding for the response to each previous guess response looks like eg:
     #   c+a*n-a-l*
     # Which means (0-based index of these chars):
@@ -205,14 +253,21 @@ while True:
     #   6-7 There are no *additional* 'a' letters (i.e. just the previously found)
     #   8-9 There's an (or more) 'l', but not at pos 5
 
-    # TODO skip input() if autoplay
-    guess = input("Previous reply (e.g. 's+o-l*i*d-'): ")
+    if reply:
+        print("Reply: ", reply)
+    else:
+        reply = input("Reply: ")
+        print()
+
+    if options.target and guess == options.target:
+        print(f"Found in {guesses_n} tries")
+        exit()
 
     # Note if a letter was never seen (and no later positions), as then 'grey' means not present at all
     letter_maybe_del = set()
     for pos in range(LEN):
-        letter = guess[pos*2]
-        op     = guess[pos*2+1]
+        letter = reply[pos*2]
+        op     = reply[pos*2+1]
 
         # Note, the below [pos+1] syntax is because 1-based counting in the target word
         if op == '+':
