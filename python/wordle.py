@@ -35,11 +35,14 @@
 #   contain at least one duplicated letter—this is worth keeping in mind,
 #   regardless of your strategy.
 
+
 import readline  # Not referenced, but used by input()
 import random
+import re
 from optparse import OptionParser
 from operator import itemgetter
 from wordfreq import zipf_frequency
+
 
 def score_letters(word):
     """For choosing candidate starting words, based on common letter frequencies"""
@@ -53,6 +56,49 @@ def score_letters(word):
         score += letter_freq[letter.lower()]
         used.add(letter.lower())
     return score
+
+
+def beep():
+    print("\a", end='', flush=True)
+
+
+def completer(text: str, state: int) -> str:
+    """Readline (TAB) autocompletion of remaining candidate words"""
+    global remaining
+
+    completions = []
+    if not text:
+        return
+
+    # Completions via recent spellcheck suggestions (from last online fetch)
+    completions += [
+                    s for s in remaining
+                    if s.startswith(text.casefold())
+                    ]
+
+    if state < len(completions):
+        return completions[state]
+
+    if state == 0:
+        # text doesn't match any possible completion
+        beep()
+
+
+readline.set_completer(completer)
+readline.parse_and_bind("tab: complete")
+
+parser = OptionParser()
+parser.add_option('--top',        type='int',          help="Show top N=15 candidates each round", default=15)
+parser.add_option('--length',     type='int',          help="Length of all words, default 5", default=5)
+parser.add_option('--target',     type='string',       help="Set the target word, e.g. to test")
+parser.add_option('--random',     action='store_true', help="Pick a random target, for you to play locally. Else assume unknown.")
+parser.add_option('--auto',       action='store_true', help="The algorithm plays against itself.")
+parser.add_option('--dict',       type='string',       help="Path to custom dictionary file, one word per line",
+    default='./english-lower-len-5.dict', # TODO generalize the path
+    )
+(options, args) = parser.parse_args()
+
+LEN = options.length
 
 
 # TODO: update with one that has a proper/recent citation
@@ -91,18 +137,6 @@ letter_freq = {
     'z': 0.00074,
 }
 
-parser = OptionParser()
-parser.add_option('--top',        type='int',          help="Show top N=15 candidates each round", default=15)
-parser.add_option('--length',     type='int',          help="Length of all words, default 5", default=5)
-parser.add_option('--target',     type='string',       help="Set the target word, e.g. to test")
-parser.add_option('--random',     action='store_true', help="Pick a random target, for you to play locally. Else assume unknown.")
-parser.add_option('--auto',       action='store_true', help="The algorithm plays against itself.")
-parser.add_option('--dict',       type='string',       help="Path to custom dictionary file, one word per line",
-    default='./english-lower-len-5.dict', # TODO generalize the path
-    )
-(options, args) = parser.parse_args()
-
-LEN = options.length
 
 # Collect indexes to find words matching certain criteria.
 # This is a dict[list[set[]]]
@@ -160,6 +194,8 @@ guess = ''
 
 while True:
 
+    print("\nRound: ", guesses_n+1)
+
     # Go over remaining candidates
     remaining = set()
     for letter in lookup:
@@ -174,13 +210,6 @@ while True:
     remaining = remaining - blacklist_words
     if not remaining:
         print('None')
-        exit()
-
-    # This is a bit redundant.
-    # If you're playing an external game, you already know you've won.
-    # But, for completeness, this amounts to entering '+++++' here, as your victory lap.
-    if len(remaining) == 1 and guess and guess in remaining:
-        print(f"Found in {guesses_n} tries")
         exit()
 
     scores = dict()
@@ -199,22 +228,45 @@ while True:
 
         scores[word] = { 'word': word, 'by_word': by_word, 'by_letter': by_letter, 'by_combined': by_combined, }
 
-    # Sort for top N objs by key
-    scores = sorted(scores.values(), key=itemgetter('by_combined'), reverse=True)
     print(f"{'lett':>5} {'word':>5} {'combo':>5}")
-
-    for s in scores[:options.top]:
+    # Sort for top N objs by key
+    scores_sorted = sorted(scores.values(), key=itemgetter('by_combined'), reverse=True)
+    for s in scores_sorted[:options.top]:
         print(f"{s['by_letter']:5.2f} {s['by_word']:5.2f} {s['by_combined']:5.2f} {s['word']:20s}")
 
-    # TODO make 'guess' and 'reply' separate strings (same len); no need to encode them together; it's confusing
-    reply = ''
-    # TODO wrap in a validation loop,
-    # Check eg for options.length, and valid chars, in (filtered) dictionary, etc
+    print()
+
+    # If there's only one option left, guessing again is redundant.
+    if len(remaining) == 1:
+        print(f"Found:  {guesses_n+1} tries")
+        exit()
+
+    guess = None
+    if options.auto:
+        # Auto guess the top-scoring remaining word
+        guess = scores_sorted[0]['word']
+        print(f"Guess:  {guess}")
+
+    while not guess:
+        guess = input(f"Guess:  ")
+        if guess not in remaining:
+            guess = None
+
     guesses_n += 1
-    guess = input(f"Guess {guesses_n:2d}: ")
 
     # Each letter in the reply has a corresponding operator code: exact (+), wild (*), miss (-)
     reply_ops = [ None for i in range(options.length) ]
+
+    # eg:  c+a*n-a-l*
+    # Which means (0-based index of these chars):
+    #   0-1 There's a 'c' at pos 1 (and maybe elsewehere?)
+    #   2-3 There's an (or more) 'a' but not at pos 2 (pos 2 out of 5, 1-based)
+    #   4-5 There is no 'n'
+    #   6-7 There are no *additional* 'a' letters (i.e. just the previously found)
+    #   8-9 There's an (or more) 'l', but not at pos 5
+
+    # For display feedback only
+    reply = ''
 
     if options.target:
         # For tracking duplicate letters in target and guess
@@ -241,33 +293,24 @@ while True:
             else:
                 reply_ops[pos] = '-'
 
-        for pos, op in enumerate(reply_ops):
-            reply += guess[pos] + op
+        reply = ''.join(reply_ops)
 
-    # The syntax/encoding for the response to each previous guess response looks like eg:
-    #   c+a*n-a-l*
-    # Which means (0-based index of these chars):
-    #   0-1 There's a 'c' at pos 1 (and maybe elsewehere?)
-    #   2-3 There's an (or more) 'a' but not at pos 2 (pos 2 out of 5, 1-based)
-    #   4-5 There is no 'n'
-    #   6-7 There are no *additional* 'a' letters (i.e. just the previously found)
-    #   8-9 There's an (or more) 'l', but not at pos 5
 
     if reply:
         print("Reply: ", reply)
     else:
-        reply = input("Reply: ")
-        print()
+        reply = input("Reply:  ")
 
     if options.target and guess == options.target:
-        print(f"Found in {guesses_n} tries")
+        print(f"Found:  {guesses_n} tries")
         exit()
 
-    # Note if a letter was never seen (and no later positions), as then 'grey' means not present at all
+    # Note if a letter was never seen (and no later positions), as then gray means not present at all
     letter_maybe_del = set()
+
     for pos in range(LEN):
-        letter = reply[pos*2]
-        op     = reply[pos*2+1]
+        letter = guess[pos]
+        op     = reply[pos]
 
         # Note, the below [pos+1] syntax is because 1-based counting in the target word
         if op == '+':
@@ -307,5 +350,4 @@ while True:
             for s in lookup[letter]:
                 blacklist_words = blacklist_words | s
             lookup[letter] = [ set() for i in range(LEN+1)]
-
 
