@@ -6,8 +6,8 @@
 # Backlog:
 # Search for TODO below
 
-# Option to autoplay, where random target is chosen, and then iterates itself.
-# Guesses just based on the #1 ranked word (optimize that later ...)
+# Auto mode:
+# Make it into a benchmark mode, that loops over the whole dictionary, and plot the distribution
 
 # Learn:
 # Log previous wordle words, daily:
@@ -299,9 +299,12 @@ while True:
     if reply:
         print("Reply: ", reply)
     else:
-        reply = input("Reply:  ")
+        while not reply:
+            reply = input("Reply:  ")
+            if len(reply) != LEN or not re.match('^[*+-]+$', reply):
+                reply = None
 
-    if options.target and guess == options.target:
+    if (options.target and guess == options.target) or re.match('^[+]+$', reply):
         print(f"Found:  {guesses_n} tries")
         exit()
 
