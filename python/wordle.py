@@ -1,42 +1,46 @@
 #!/usr/bin/env python
 
+# This is a script to play, and to help you play and win at, Wordle.
 # https://www.nytimes.com/games/wordle/index.html
 # https://en.wikipedia.org/wiki/Wordle
 
-# Backlog:
-# Search for TODO below
-
-# Auto mode:
-# Make it into a benchmark mode, that loops over the whole dictionary, and plot the distribution
-
-# Learn:
-# Log previous wordle words, daily:
-#   Exclude (recent) past words from guesses, or flag them, with an age, eg 23w (old)
-#   What's the distribution of word frequencies of past words, relative to the dictionary?
-#   Any words have been repeated on multiple days?
-#   Are any PoS excluded? (e.g. do they include boring pronouns like "their" ?)
-#   Any bias toward PoS (adjectives), or against PoS (plural nouns) ?
-# Consider other dictionaries. Eg 'trove' (2022-02-23) isn't in any of /usr/share/dict/*
-
-# TODO Be smarter about duplicates
-
-# Regarding duplicates: (From Wikipedia):
+# A note regarding duplicate letters: (From Wikipedia):
 # Multiple instances of the same letter in a guess, such as the "o"s
 # in "robot", will be colored green or yellow only if the letter also appears
 # multiple times in the answer; otherwise, excess repeating letters will be
 # colored gray (and it's *not* sequential, could have gray 'o' before green 'o')
+
+# Backlog:
+# Search for TODO below
+
+# TODO Auto mode: (with stats)
+# Make it into a benchmark mode, that loops over the whole dictionary, and plot the distribution.
+# So, that you can then evaluate alternative strategies/scoring across the whole dictionary.
+# cf. https://freshman.dev/wordle/#/leaderboard
+
+# Learn:
+# Log previous wordle words, daily:
+#   Exclude (recent) past words from guesses, or flag them, with an age, eg 23w (old)
+
+# Understand the standard dictionary better: (or just get it from the browser JS code)
+#   What's the distribution of word frequencies of past words, relative to the dictionary?
+#   Any words have been repeated on multiple days?
+#   Are any PoS excluded? (e.g. do they include boring pronouns like "their" ?)
+#   Any bias toward PoS (adjectives), or against PoS (plural nouns) ? No plural nouns, it seems.
+
+# Consider other dictionaries. Eg 'trove' (2022-02-23) isn't in any of /usr/share/dict/*
+# Considered other published dictionaries, eg:
+# https://gist.github.com/cfreshman/a03ef2cba789d8cf00c08f767e0fad7b
+
+# TODO be more efficient with processing of duplicates
 
 # Checkout strategy suggestions published by others:
 # https://slate.com/technology/2022/01/wordle-how-to-win-strategy-crossword-experts.html
 #   Alt strategy: maximize information gain of guess by not always including required letters.
 #   What choice of letters gets closest to a 50% split of eligible words (max elimination rate)
 
-#   'According to our analysis, almost exactly one-third of Wordle solutions
-#   contain at least one duplicated letter—this is worth keeping in mind,
-#   regardless of your strategy.
 
-
-import readline  # Not referenced, but used by input()
+import readline
 import random
 import re
 from optparse import OptionParser
@@ -88,7 +92,7 @@ readline.set_completer(completer)
 readline.parse_and_bind("tab: complete")
 
 parser = OptionParser()
-parser.add_option('--top',        type='int',          help="Show top N=15 candidates each round", default=15)
+parser.add_option('--top',        type='int',          help="Show top N=20 candidates each round", default=20)
 parser.add_option('--length',     type='int',          help="Length of all words, default 5", default=5)
 parser.add_option('--target',     type='string',       help="Set the target word, e.g. to test")
 parser.add_option('--random',     action='store_true', help="Pick a random target, for you to play locally. Else assume unknown.")
