@@ -1,39 +1,12 @@
 #!/usr/bin/env python
 
-# Backlog:
-# Find/Allow other dictionaries/langs. Rather, check/dedupe multiple dicts.
-# Option to require full-length matches.
-# Generate puzzles, or find more easier/harder ones.
-
 import subprocess
 from optparse import OptionParser
 from wordfreq import zipf_frequency
 from operator import itemgetter
 import re
 import readline
-
-
-# DICT_FILE = '/usr/share/dict/british-english'
-# DICT_FILE = '/usr/share/dict/cracklib-small'
-DICT_FILE = '/usr/share/dict/american-english'
-
-MIN_LEN = 4
-
-parser = OptionParser()
-parser.add_option("-r", "--required", dest="required",
-    help="A letter that is required in every partial anagram",
-)
-
-(options, args) = parser.parse_args()
-if not args:
-    parser.print_usage()
-    exit(1)
-
-alphabet = args[0]
-required = options.required or ""
-
-if required and required not in alphabet:
-    alphabet += required
+import random
 
 
 def is_valid_word(word, alphabet):
@@ -54,11 +27,25 @@ def beep():
     print("\a", end='', flush=True)
 
 
+def print_alphabet(required, alphabet):
+    alphabet = list(alphabet.upper())
+    alphabet.insert(3, required.upper())
+    hex = ''\
+        + ' {} {}   \n'\
+        + '{} {} {} \n'\
+        + ' {} {}   \n'\
+        + ''
+    print(hex.format(*alphabet))
+
+
 scores = dict()
+
 def completer(text: str, state: int) -> str:
     """Readline (TAB) autocompletion of remaining candidate words"""
     global scores
-
+    global opts
+    if opts.play:
+        return
     completions = []
     if not text:
         return
@@ -81,13 +68,33 @@ def completer(text: str, state: int) -> str:
 readline.set_completer(completer)
 readline.parse_and_bind("tab: complete")
 
+opt_parser = OptionParser()
+opt_parser.add_option('-r', '--req', help="A letter that is required in every partial anagram")
+opt_parser.add_option('-m', '--min',      help="Minimum length of valid words. Default 4", default=4, type='int')
+opt_parser.add_option('-d', '--dict',     help="Dictionary name (/usr/share/dict/*) or full path. Default 'american-english'", default='american-english')
+opt_parser.add_option('--play', action='store_true', help="Play against this script, hiding candidate words until guessed.")
 
-file = open(DICT_FILE)
+(opts, args) = opt_parser.parse_args()
+if not args:
+    opt_parser.print_usage()
+    exit(1)
+
+alphabet = args[0]
+required = opts.req or ""
+
+if required and required not in alphabet:
+    alphabet += required
+
+if not opts.dict.startswith('/'):
+    opts.dict = '/usr/share/dict/' + opts.dict
+
+file = open(opts.dict)
 count = 0
 
 for word in file:
     word = word.strip()
-    if len(word) < MIN_LEN:
+    word = word.lower()
+    if len(word) < opts.min:
         continue
     if required and required not in word:
         continue
@@ -113,6 +120,8 @@ for word in file:
 
 
 while True:
+    # Clear screen
+    print('\033c')
     # Headings
     print(f"{'#':>2} {'len':>4} {'freq':>4} {'comb':>4} {'*':>1} {'word'}")
     # Remaining words, sorted, by status+difficulty
@@ -120,9 +129,17 @@ while True:
     scores_sorted = sorted(scores_sorted, key=itemgetter('difficulty'), reverse=False)
     scores_sorted = sorted(scores_sorted, key=itemgetter('status'),     reverse=False)
 
+    missing_n = 0
     for i, s in enumerate(scores_sorted):
+        if opts.play and ( not s['status'] or s['status'] == '*' ):
+            missing_n += 1
+            continue
         print(f"{i:2d} {s['l']:4.0f} {s['freq']:4.0f} {s['difficulty']:4.0f} {s['status']:>1s} {s['word']:20s}")
     print()
+
+    print(f"{missing_n:3d} words to go\n")
+
+    print_alphabet(required, alphabet)
 
     # All words covered?
     if len( [ k for k in scores if not scores[k]['status'] ]    ) == 0:
@@ -130,16 +147,23 @@ while True:
 
     # Mark words as accepted / rejected, while any left (without status)
     try:
-        cmd = input("cmd [? + -]: ")
+        cmd = input("cmd [? + - *]: ")
     except:
         print()
         exit()
 
-    match = re.match('\s*([?+-]?)\s*(.+)\s*', cmd)
+    match = re.match('\s*([?+*-]?)\s*(.*)\s*', cmd)
     if not match:
         beep()
         continue
     op, word = match.groups()
+
+    if op == '*':
+        # (re-)randomize the alphabet (for the printed display each iteration).
+        # This helps with visually guessing words.
+        alphabet = ''.join(random.sample(alphabet, len(alphabet)))
+        continue
+
     if word not in scores:
         beep()
         continue
