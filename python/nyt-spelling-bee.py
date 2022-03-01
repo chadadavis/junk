@@ -7,6 +7,8 @@ from operator import itemgetter
 import re
 import readline
 import random
+import textwrap
+import os
 
 
 def is_valid_word(word, alphabet):
@@ -65,6 +67,19 @@ def completer(text: str, state: int) -> str:
         beep()
 
 
+def wrapper(string):
+    LINE_WIDTH = os.get_terminal_size().columns
+    WRAP_WIDTH = LINE_WIDTH // 2
+
+    lines_wrapped = []
+    for line in string.splitlines():
+        line_wrap = textwrap.wrap(line, WRAP_WIDTH, replace_whitespace=False, drop_whitespace=False)
+        line_wrap = line_wrap or ['']
+        lines_wrapped += line_wrap
+    string = "\n".join(lines_wrapped)
+    return string
+
+
 readline.set_completer(completer)
 readline.parse_and_bind("tab: complete")
 
@@ -118,10 +133,10 @@ for word in file:
         'status': complete,
     }
 
-
+definition = None
 while True:
     # Clear screen
-    print('\033c')
+    # print('\033c')
     # Headings
     print(f"{'#':>2} {'len':>4} {'freq':>4} {'comb':>4} {'*':>1} {'word'}")
     # Remaining words, sorted, by status+difficulty
@@ -137,13 +152,18 @@ while True:
         print(f"{i:2d} {s['l']:4.0f} {s['freq']:4.0f} {s['difficulty']:4.0f} {s['status']:>1s} {s['word']:20s}")
     print()
 
-    print(f"{missing_n:3d} words to go\n")
+    if opts.play:
+        print(f"{missing_n:3d} words to go\n")
 
     print_alphabet(required, alphabet)
 
     # All words covered?
     if len( [ k for k in scores if not scores[k]['status'] ]    ) == 0:
         exit()
+
+    if definition is not None:
+        print(wrapper(definition), "\n")
+        definition = None
 
     # Mark words as accepted / rejected, while any left (without status)
     try:
@@ -171,6 +191,10 @@ while True:
     # The default operator is to mark he word as already accepted
     op = op or '+'
     if op in ('-', '+'):
+        if scores[word]['status'] == op:
+            # Already did this one
+            beep()
+            print('already')
         scores[word]['status'] = op
 
     # Lookup definition of a word
@@ -182,5 +206,5 @@ while True:
         definition = definition.decode('utf-8')
         definition = definition.strip()
         definition = definition[:200]
-        print("\n", definition, "\n")
+
 
