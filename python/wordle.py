@@ -14,7 +14,7 @@
 # Search for TODO below
 
 # TODO Auto mode: (with stats)
-# Make it into a benchmark mode, that loops over the whole dictionary, and plot the distribution.
+# Make it into a benchmark mode, that loops over the whole dictionary, and compute the average num guesses.
 # So, that you can then evaluate alternative strategies/scoring across the whole dictionary.
 # cf. https://freshman.dev/wordle/#/leaderboard
 
@@ -92,7 +92,7 @@ readline.set_completer(completer)
 readline.parse_and_bind("tab: complete")
 
 parser = OptionParser()
-parser.add_option('--top',        type='int',          help="Show top N=20 candidates each round", default=20)
+parser.add_option('--top',        type='int',          help="Show top N=20 candidates each round", )
 parser.add_option('--length',     type='int',          help="Length of all words, default 5", default=5)
 parser.add_option('--target',     type='string',       help="Set the target word, e.g. to test")
 parser.add_option('--random',     action='store_true', help="Pick a random target, for you to play locally. Else assume unknown.")
@@ -100,9 +100,10 @@ parser.add_option('--auto',       action='store_true', help="The algorithm plays
 parser.add_option('--dict',       type='string',       help="Path to custom dictionary file, one word per line",
     default='./english-lower-len-5.dict', # TODO generalize the path
     )
-(options, args) = parser.parse_args()
-
-LEN = options.length
+(opts, args) = parser.parse_args()
+# Default to printing 0 choices in auto mode, else 20 (if not already explicity set)
+opts.top = opts.top if opts.top is not None else (0 if opts.auto else 20)
+LEN = opts.length
 
 
 # TODO: update with one that has a proper/recent citation
@@ -162,14 +163,14 @@ lookup = dict()
 # =~ 4600 words
 # cat /usr/share/dict/american-english |grep '^.....$' |grep -v '^[A-Z]' |grep -v "'" | LANG=C grep '^[a-z]*$' |sort |uniq > english-lower-len-5.dict
 
-file = open(options.dict)
+file = open(opts.dict)
 num_words = 0
 target_found = False
 
 for word in file:
     num_words += 1
     word = word.strip()
-    if options.target and options.target == word:
+    if opts.target and opts.target == word:
         target_found = True
     for pos, letter in enumerate(word):
         lookup[letter]    = lookup.get(letter) or [ set() for i in range(LEN+1) ]
@@ -177,16 +178,16 @@ for word in file:
         # Note, this word is a candidate for (green, positioned) letter (1-based)
         lookup[letter][pos+1].add(word)
 
-if options.target and not target_found:
-    print(f"Target ({options.target}) doesn't exist in dictionary")
+if opts.target and not target_found:
+    print(f"Target ({opts.target}) doesn't exist in dictionary")
     exit()
 
-if not options.target and options.random:
+if not opts.target and opts.random:
     # To get a random word, seek back to the right pos in file
     i = random.randint(0, num_words-1)
     file.seek(i * (LEN+1)) # Fixed line width, plus trailing "\n" byte
-    options.target = file.readline()
-    options.target = options.target.strip()
+    opts.target = file.readline()
+    opts.target = opts.target.strip()
 
 file.close()
 
@@ -232,21 +233,23 @@ while True:
 
         scores[word] = { 'word': word, 'by_word': by_word, 'by_letter': by_letter, 'by_combined': by_combined, }
 
-    print(f"{'lett':>5} {'word':>5} {'combo':>5}")
     # Sort for top N objs by key
     scores_sorted = sorted(scores.values(), key=itemgetter('by_combined'), reverse=True)
-    for s in scores_sorted[:options.top]:
+    if opts.top:
+        # Print headings
+        print(f"{'lett':>5} {'word':>5} {'combo':>5}")
+    for s in scores_sorted[:opts.top]:
         print(f"{s['by_letter']:5.2f} {s['by_word']:5.2f} {s['by_combined']:5.2f} {s['word']:20s}")
 
     print()
 
     # If there's only one option left, guessing again is redundant.
     if len(remaining) == 1:
-        print(f"Found:  {guesses_n+1} tries")
+        print(f"\nFound: {guesses_n+1:2d} tries")
         exit()
 
     guess = None
-    if options.auto:
+    if opts.auto:
         # Auto guess the top-scoring remaining word
         guess = scores_sorted[0]['word']
         print(f"Guess:  {guess}")
@@ -255,11 +258,12 @@ while True:
         guess = input(f"Guess:  ")
         if guess not in remaining:
             guess = None
+            beep()
 
     guesses_n += 1
 
     # Each letter in the reply has a corresponding operator code: exact (+), wild (*), miss (-)
-    reply_ops = [ None for i in range(options.length) ]
+    reply_ops = [ None for i in range(opts.length) ]
 
     # eg:  c+a*n-a-l*
     # Which means (0-based index of these chars):
@@ -272,17 +276,17 @@ while True:
     # For display feedback only
     reply = ''
 
-    if options.target:
+    if opts.target:
         # For tracking duplicate letters in target and guess
         remaining_letters = dict()
-        for l in options.target:
+        for l in opts.target:
             remaining_letters[l] = remaining_letters.get(l) or 0
             remaining_letters[l] += 1
 
         # Just looking for exact matches in the first iteration.
         # This is because we need to prioritize scoring exact matches (+) before wilds (*).
         for pos, l in enumerate(guess):
-            if l == options.target[pos]:
+            if l == opts.target[pos]:
                 reply_ops[pos] = '+'
                 remaining_letters[l] -= 1
 
@@ -307,9 +311,10 @@ while True:
             reply = input("Reply:  ")
             if len(reply) != LEN or not re.match('^[*+_-]+$', reply):
                 reply = None
+                beep()
 
-    if (options.target and guess == options.target) or re.match('^[+]+$', reply):
-        print(f"Found:  {guesses_n} tries")
+    if (opts.target and guess == opts.target) or re.match('^[+]+$', reply):
+        print(f"\nFound: {guesses_n:2d} tries")
         exit()
 
     # Note if a letter was never seen (and no later positions), as then gray means not present at all
