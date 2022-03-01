@@ -305,7 +305,7 @@ while True:
     else:
         while not reply:
             reply = input("Reply:  ")
-            if len(reply) != LEN or not re.match('^[*+-]+$', reply):
+            if len(reply) != LEN or not re.match('^[*+_-]+$', reply):
                 reply = None
 
     if (options.target and guess == options.target) or re.match('^[+]+$', reply):
@@ -337,8 +337,9 @@ while True:
             lookup[letter][pos+1] = set()
             # This letter is now required at some/any other pos
             required_letters.add(letter)
-        if op == '-':
-            # Letter is not present in this position
+        if op == '-' or op == '_':
+            # (The '_' is just to also allow to keep the Shift key pressed for all op chars.)
+            # Letter is not present in this position:
             blacklist_words = blacklist_words | lookup[letter][pos+1]
             lookup[letter][pos+1] = set()
 
