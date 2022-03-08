@@ -25,7 +25,7 @@
 # Scoring
 # Once I've already confirmed an S (maybe at a single pos),
 # the remaining scores for other potential S letters in the word should be updated
-# Is an HMM relveant here?
+# Is an HMM relevant here?
 
 # Learn:
 # Log previous wordle words, daily:
@@ -90,7 +90,7 @@ def score_letters(word):
             # Pos is 1-based counting, since [0] counts "any position"
             score += 0.5 - abs(0.5 - letter_freq_d[letter][pos+1])
 
-            # TODO rather than completely skip duplicate counting, we could just linear downweight duplicates.
+            # TODO rather than completely skip duplicate scoring, we could just linear downweight duplicates.
             # Because words do have duplicate letters, and we might get extra info by guessing for duplicates too.
             if letter not in used:
 
@@ -107,7 +107,7 @@ def beep():
 
 def completer(text: str, state: int) -> str:
     """Readline (TAB) autocompletion of remaining candidate words"""
-    global remaining
+    global words_left
 
     completions = []
     if not text:
@@ -115,7 +115,7 @@ def completer(text: str, state: int) -> str:
 
     # Completions via recent spellcheck suggestions (from last online fetch)
     completions += [
-                    s for s in remaining
+                    s for s in words_left
                     if s.startswith(text.casefold())
                     ]
 
@@ -135,28 +135,19 @@ parser.add_option('--top',        type='int',          help="Show top N=20 candi
 parser.add_option('--length',     type='int',          help="Length of all words, default 5", default=5)
 parser.add_option('--scoring',    type='int',          help="Scoring mode")
 parser.add_option('--target',     type='string',       help="Set the target word, e.g. to test")
-parser.add_option('--boost',      type='string',       help="File containing words that are more likley to be picked")
+parser.add_option('--boost',      type='string',       help="File containing words that are more likely to be picked")
 parser.add_option('--random',     action='store_true', help="Pick a random target, for you to play locally. Else assume unknown.")
 parser.add_option('--auto',       action='store_true', help="The algorithm plays against itself.")
 parser.add_option('--dict',       type='string',       help="Path to custom dictionary file, one word per line",
     default='./wordle-a.dict', # TODO generalize the path
     )
 (opts, args) = parser.parse_args()
-# Default to printing 0 choices in auto mode, else 20 (if not already explicitly set)
+# Default to printing 0 choices in auto mode, else 20 (if not already explicitly defined)
 opts.top = opts.top if opts.top is not None else (0 if opts.auto else 20)
+opts.random = opts.random or opts.auto
 LEN = opts.length
 
-
-# Collect indexes to find words matching certain criteria.
-# This is a dict[list[set[]]]
-# The dict tracks the letters
-# The list tracks what position the letter is in (0 for wildcard/yellow position)
-# The set tracks the words that meet that criteria.
-# candidates['y'][2] contains 'word' # means the letter is the second letter in the word
-
-lookup = dict()
-
-# Build starting list
+# Build starting list from dictionary
 # TODO: remove custom file and just build this based on the standard en-us dictionary
 # Generate dict (based on what I assume Wordle uses)
 #   en-us
@@ -171,17 +162,41 @@ lookup = dict()
 # eg https://wordle.at/
 # https://woordle.nl/
 
-file = open(opts.dict)
-num_words = 0
-target_found = False
+dict_file = open(opts.dict)
+words_left = set([w.strip() for w in dict_file])
+words_left_n = len(words_left)
 
-for word in file:
-    num_words += 1
-    word = word.strip()
-    # Note, this is case sensitive here, as that's relevant for e.g. German
-    if opts.target and opts.target == word:
-        target_found = True
+# Note, this is case sensitive here, as that's relevant for e.g. German
+if opts.target and opts.target not in words_left:
+    print(f"Target ({opts.target}) doesn't exist in dictionary ({opts.dict})")
+    exit()
 
+if not opts.target and opts.random:
+    # To get a random word, seek back to the right pos in file
+    i = random.randint(0, words_left_n-1)
+    dict_file.seek(i * (LEN+1)) # Fixed line width, plus trailing "\n" byte
+    opts.target = dict_file.readline().strip()
+
+dict_file.close()
+
+boost = set()
+if opts.boost:
+    boost_file = open(opts.boost)
+    boost = set([w.strip() for w in boost_file])
+    boost_file.close()
+
+################################################################################
+
+# Collect indexes to find words matching certain criteria.
+# This DS is a dict[list[set[]]]
+# The dict tracks the letters
+# The list tracks what position the letter is in (0 for wildcard/yellow position)
+# The set tracks the words that meet that criteria.
+# candidates['y'][2] contains 'word' # means the letter is the second (1-based) letter in the word
+
+lookup = dict()
+
+for word in words_left:
     # TODO split the rest of this out and just recompute for each round?
     # Then could also more easily just count occurrences of this letter over all letter-positions left
     for pos, letter in enumerate(word):
@@ -206,32 +221,12 @@ for letter in lookup:
     letter_freq_d[letter] = [ 0 for i in range(LEN+1) ]
     # 1-based counting of letter positions in word
     for pos in range(1,LEN+1):
-        letter_freq_d[letter][pos] = len(lookup[letter][pos]) / num_words
+        letter_freq_d[letter][pos] = len(lookup[letter][pos]) / words_left_n
         s = s | lookup[letter][pos]
 
     # What fraction of words have this letter in any pos
-    letter_freq_d[letter][0] = len(s) / num_words
+    letter_freq_d[letter][0] = len(s) / words_left_n
 
-if opts.target and not target_found:
-    print(f"Target ({opts.target}) doesn't exist in dictionary")
-    exit()
-
-if not opts.target and opts.random:
-    # To get a random word, seek back to the right pos in file
-    i = random.randint(0, num_words-1)
-    file.seek(i * (LEN+1)) # Fixed line width, plus trailing "\n" byte
-    opts.target = file.readline()
-    opts.target = opts.target.strip()
-
-file.close()
-
-boost = set()
-if opts.boost:
-    file = open(opts.boost)
-    for word in file:
-        word = word.strip()
-        boost.add(word)
-    file.close()
 
 # This basically implements hard-mode by default, where confirmed letters are subsequently required.
 # Keep track of multiples/duplicates required
@@ -243,30 +238,30 @@ guess = ''
 while True:
 
     # Go over remaining candidates
-    remaining = set()
+    words_left = set()
     for letter in lookup:
         for pos in range(LEN):
-            remaining = remaining | lookup[letter][pos+1]
+            words_left = words_left | lookup[letter][pos+1]
             # Really not efficient, but we need to ensure that wildcard letters present:
             for w in lookup[letter][pos+1]:
                 for l in min_letters:
                     if w.count(l) < min_letters[l]:
                         blacklist_words.add(w)
 
-    remaining = remaining - blacklist_words
+    words_left = words_left - blacklist_words
 
     guesses_n += 1
     print()
     print(f"Round: {guesses_n}")
-    print(f"Left:  {len(remaining)}")
+    print(f"Left:  {len(words_left)}")
     print()
 
-    if not remaining:
+    if not words_left:
         print('None')
         exit()
 
     scores = dict()
-    for word in remaining:
+    for word in words_left:
         # Word freq. Note, this just makes the word more likely to be in the Wordle
         # dictionary, since there's some threshold for excluding less common words.
         # However, given two words in the dictionary, that one is twice as frequent
@@ -302,7 +297,7 @@ while True:
 
     while not guess:
         guess = input(f"Guess:  ")
-        if guess not in remaining:
+        if guess not in words_left:
             guess = None
             beep()
 
