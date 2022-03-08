@@ -13,10 +13,19 @@
 # Backlog:
 # Search for TODO below
 
+# Onto G Collab sheet ? but sync with GitHub?
+
 # TODO Auto mode: (with stats)
 # Make it into a benchmark mode, that loops over the whole dictionary, and compute the average num guesses.
 # So, that you can then evaluate alternative strategies/scoring across the whole dictionary.
 # cf. https://freshman.dev/wordle/#/leaderboard
+# And https://www.reddit.com/r/wordle/comments/s88iq4/a_wordle_bot_leaderboard/
+# And make it print a running average while it's running ?
+
+# Scoring
+# Once I've already confirmed an S (maybe at a single pos),
+# the remaining scores for other potential S letters in the word should be updated
+# Is an HMM relveant here?
 
 # Learn:
 # Log previous wordle words, daily:
@@ -27,6 +36,14 @@
 #   Any words have been repeated on multiple days?
 #   Are any PoS excluded? (e.g. do they include boring pronouns like "their" ?)
 #   Any bias toward PoS (adjectives), or against PoS (plural nouns) ? No plural nouns, it seems.
+# https://medium.com/@gianpaul.r/tokenization-and-parts-of-speech-pos-tagging-in-pythons-nltk-library-2d30f70af13b
+# https://www.nltk.org/book/ch05.html
+
+# There is a list of potential target words (the A list), which seems to exclude declensions.
+#   Use a PoS tagger to boost words that are equal to their own stem? (And non-proper-nouns, etc)
+# There is a list of allowed guesses (the B list), which can be strategically useful to excluding letters.
+# Use a decision tree / random forest?
+# https://en.wikipedia.org/wiki/Random_forest
 
 # Consider other dictionaries. Eg 'trove' (2022-02-23) isn't in any of /usr/share/dict/*
 # Considered other published dictionaries, eg:
@@ -39,6 +56,9 @@
 #   Alt strategy: maximize information gain of guess by not always including required letters.
 #   What choice of letters gets closest to a 50% split of eligible words (max elimination rate)
 
+# Consider not requiring hard-mode always?
+# But that changes a lot of the assumptions that each reply contains all the inforamtion about subsequent candidates ...
+
 
 import readline
 import random
@@ -50,15 +70,34 @@ from wordfreq import zipf_frequency
 
 def score_letters(word):
     """For choosing candidate starting words, based on common letter frequencies"""
-
+    global opts
+    global letter_freq_d
     score = 0.0
     used = set()
-    for letter in word:
-        # But don't double count duplicate letters since they're uninformative
-        if letter.lower() in used:
-            continue
-        score += letter_freq[letter.lower()]
-        used.add(letter.lower())
+    for pos, letter in enumerate(word):
+
+        # TODO adapt this for case-sensitive langs like German?
+        letter = letter.lower()
+
+        if opts.scoring == 2 and letter not in used:
+            # Based on whatever dictionary we read in from opts.dict
+            score += letter_freq_d[letter][0]
+        elif opts.scoring == 3 and letter not in used:
+            # Based on minimizing distance of each score from 50% (discriminatory ability)
+            score += 0.5 - abs(0.5 - letter_freq_d[letter][0])
+        elif opts.scoring == 4:
+            # Also count per-pos frequency (higher prio)
+            # Pos is 1-based counting, since [0] counts "any position"
+            score += 0.5 - abs(0.5 - letter_freq_d[letter][pos+1])
+
+            # TODO rather than completely skip duplicate counting, we could just linear downweight duplicates.
+            # Because words do have duplicate letters, and we might get extra info by guessing for duplicates too.
+            if letter not in used:
+
+                # Scale this down, since per-pos score weighs more
+                score += 0.05 * (0.5 - abs(0.5 - letter_freq_d[letter][0]))
+
+        used.add(letter)
     return score
 
 
@@ -94,53 +133,18 @@ readline.parse_and_bind("tab: complete")
 parser = OptionParser()
 parser.add_option('--top',        type='int',          help="Show top N=20 candidates each round", )
 parser.add_option('--length',     type='int',          help="Length of all words, default 5", default=5)
+parser.add_option('--scoring',    type='int',          help="Scoring mode")
 parser.add_option('--target',     type='string',       help="Set the target word, e.g. to test")
+parser.add_option('--boost',      type='string',       help="File containing words that are more likley to be picked")
 parser.add_option('--random',     action='store_true', help="Pick a random target, for you to play locally. Else assume unknown.")
 parser.add_option('--auto',       action='store_true', help="The algorithm plays against itself.")
 parser.add_option('--dict',       type='string',       help="Path to custom dictionary file, one word per line",
-    default='./english-lower-len-5.dict', # TODO generalize the path
+    default='./wordle-a.dict', # TODO generalize the path
     )
 (opts, args) = parser.parse_args()
-# Default to printing 0 choices in auto mode, else 20 (if not already explicity set)
+# Default to printing 0 choices in auto mode, else 20 (if not already explicitly set)
 opts.top = opts.top if opts.top is not None else (0 if opts.auto else 20)
 LEN = opts.length
-
-
-# TODO: update with one that has a proper/recent citation
-# https://en.wikipedia.org/wiki/Letter_frequency
-# or try something like: import letter_frequency_languages
-# And Look at letter frequencies by position (in 5-letter-word), not just globally
-# TODO just derive this from our own dictionary
-# TODO maybe also useful: track the 'specificity' of each letter (ability to exclude max words)
-# E.g. score a word based on having letters whose freq (in our dict) is closest to 50% ?
-letter_freq = {
-    'e': 0.13000,
-    't': 0.09100,
-    'a': 0.08200,
-    'o': 0.07500,
-    'i': 0.07000,
-    'n': 0.06700,
-    's': 0.06300,
-    'h': 0.06100,
-    'r': 0.06000,
-    'd': 0.04300,
-    'l': 0.04000,
-    'c': 0.02800,
-    'u': 0.02800,
-    'm': 0.02500,
-    'w': 0.02400,
-    'f': 0.02200,
-    'g': 0.02000,
-    'y': 0.02000,
-    'p': 0.01900,
-    'b': 0.01500,
-    'v': 0.00980,
-    'k': 0.00770,
-    'j': 0.00150,
-    'x': 0.00150,
-    'q': 0.00095,
-    'z': 0.00074,
-}
 
 
 # Collect indexes to find words matching certain criteria.
@@ -163,6 +167,10 @@ lookup = dict()
 # =~ 4600 words
 # cat /usr/share/dict/american-english |grep '^.....$' |grep -v '^[A-Z]' |grep -v "'" | LANG=C grep '^[a-z]*$' |sort |uniq > english-lower-len-5.dict
 
+# TODO make this work with /usr/share/dict/*german and .../*dutch
+# eg https://wordle.at/
+# https://woordle.nl/
+
 file = open(opts.dict)
 num_words = 0
 target_found = False
@@ -170,13 +178,39 @@ target_found = False
 for word in file:
     num_words += 1
     word = word.strip()
+    # Note, this is case sensitive here, as that's relevant for e.g. German
     if opts.target and opts.target == word:
         target_found = True
+
+    # TODO split the rest of this out and just recompute for each round?
+    # Then could also more easily just count occurrences of this letter over all letter-positions left
     for pos, letter in enumerate(word):
-        lookup[letter]    = lookup.get(letter) or [ set() for i in range(LEN+1) ]
+        lookup[letter] = lookup.get(letter) or [ set() for i in range(LEN+1) ]
+
+        # TODO
+        # n_positions_with_letter[letter] =+ 1
 
         # Note, this word is a candidate for (green, positioned) letter (1-based)
         lookup[letter][pos+1].add(word)
+
+# TODO
+# Best way to track which letter frequencies?
+# n_words_with_this_letter_at_this_pos / n_words
+# n_words_with_this_letter_at_any_pos  / n_words # Union of the words with this letter
+# n_letters_that_are_this_letter / n_letters # Over all words, eg (union - intersection) * LEN
+
+# TODO factor this out, and consider re-computing it upon each generation, based on the remaining words?
+letter_freq_d = dict()
+for letter in lookup:
+    s = set()
+    letter_freq_d[letter] = [ 0 for i in range(LEN+1) ]
+    # 1-based counting of letter positions in word
+    for pos in range(1,LEN+1):
+        letter_freq_d[letter][pos] = len(lookup[letter][pos]) / num_words
+        s = s | lookup[letter][pos]
+
+    # What fraction of words have this letter in any pos
+    letter_freq_d[letter][0] = len(s) / num_words
 
 if opts.target and not target_found:
     print(f"Target ({opts.target}) doesn't exist in dictionary")
@@ -191,15 +225,22 @@ if not opts.target and opts.random:
 
 file.close()
 
+boost = set()
+if opts.boost:
+    file = open(opts.boost)
+    for word in file:
+        word = word.strip()
+        boost.add(word)
+    file.close()
+
 # This basically implements hard-mode by default, where confirmed letters are subsequently required.
-required_letters = set()
+# Keep track of multiples/duplicates required
+min_letters = dict()
 blacklist_words = set()
 guesses_n = 0
 guess = ''
 
 while True:
-
-    print("\nRound: ", guesses_n+1)
 
     # Go over remaining candidates
     remaining = set()
@@ -208,11 +249,18 @@ while True:
             remaining = remaining | lookup[letter][pos+1]
             # Really not efficient, but we need to ensure that wildcard letters present:
             for w in lookup[letter][pos+1]:
-                for l in required_letters:
-                    if l not in w:
+                for l in min_letters:
+                    if w.count(l) < min_letters[l]:
                         blacklist_words.add(w)
 
     remaining = remaining - blacklist_words
+
+    guesses_n += 1
+    print()
+    print(f"Round: {guesses_n}")
+    print(f"Left:  {len(remaining)}")
+    print()
+
     if not remaining:
         print('None')
         exit()
@@ -223,13 +271,16 @@ while True:
         # dictionary, since there's some threshold for excluding less common words.
         # However, given two words in the dictionary, that one is twice as frequent
         # as the other doesn't mean it's more likely to be the target word.
-        by_word = zipf_frequency(word, 'en')
+        # by_word = zipf_frequency(word, 'en')
+        by_word = .1 if word in boost else 0
+        # TODO flag words that pass criteria for being target words (stem, no lead cap in EN)
 
         # Sum of freq of (unique) letters
         by_letter = score_letters(word)
 
         # A slightly more comparable scale:
-        by_combined = 10 * by_letter + by_word
+        # by_combined = 10 * by_letter + by_word
+        by_combined = by_letter + by_word
 
         scores[word] = { 'word': word, 'by_word': by_word, 'by_letter': by_letter, 'by_combined': by_combined, }
 
@@ -237,16 +288,11 @@ while True:
     scores_sorted = sorted(scores.values(), key=itemgetter('by_combined'), reverse=True)
     if opts.top:
         # Print headings
-        print(f"{'lett':>5} {'word':>5} {'combo':>5}")
+        print(f"{'lett':>7} {'word':>7} {'combo':>7}")
     for s in scores_sorted[:opts.top]:
-        print(f"{s['by_letter']:5.2f} {s['by_word']:5.2f} {s['by_combined']:5.2f} {s['word']:20s}")
+        print(f"{s['by_letter']:7.4f} {s['by_word']:7.1f} {s['by_combined']:7.4f} {s['word']:20s}")
 
     print()
-
-    # If there's only one option left, guessing again is redundant.
-    if len(remaining) == 1:
-        print(f"\nFound: {guesses_n+1:2d} tries")
-        exit()
 
     guess = None
     if opts.auto:
@@ -259,8 +305,6 @@ while True:
         if guess not in remaining:
             guess = None
             beep()
-
-    guesses_n += 1
 
     # Each letter in the reply has a corresponding operator code: exact (+), wild (*), miss (-)
     reply_ops = [ None for i in range(opts.length) ]
@@ -320,6 +364,22 @@ while True:
     # Note if a letter was never seen (and no later positions), as then gray means not present at all
     letter_maybe_del = set()
 
+    # TODO consider if it's more efficient to just maintain a regex and filter out from `remaining` in each iteration?
+    # Two masks:
+    # filter_in  = [ 's', '.', 'r', '.', '.' ]
+    # filter_out = [
+    #     [], [a,o,p], [f], [], [t,m]
+    # ]
+    # TODO 
+    # The only missing info then is when we know the (min) count of duplicate letters, eg 2+ of 'e'
+    # Guess:  semen
+    # Reply:  +*_+_
+    # Then there may be no remaining candidates that don't have 2+ 'e'
+
+    # Count of required letters, based on previous replies.
+    # This assumes hard-mode (that all previous info is used in each subsequent guess)
+    min_letters = dict()
+
     for pos in range(LEN):
         letter = guess[pos]
         op     = reply[pos]
@@ -327,7 +387,8 @@ while True:
         # Note, the below [pos+1] syntax is because 1-based counting in the target word
         if op == '+':
             # Letter is present, at this position.
-            required_letters.add(letter)
+            min_letters[letter] = min_letters.get(letter) or 0
+            min_letters[letter] += 1
             # But maybe also at other positions ... so, don't delete those yet.
             ...
             # However, no *other* letter is at *this* pos, so delete all of those.
@@ -335,14 +396,15 @@ while True:
                 if l != letter:
                     blacklist_words = blacklist_words | lookup[l][pos+1]
                     lookup[l][pos+1] = set()
-        if op == '*':
+        elif op == '*':
             # Letter is still a candidate, but not at this pos.
-            # Might still have (multiple) occurrences elsewhere.
+            # (Might still have (multiple) occurrences of this elsewhere. Don't remove those.)
             blacklist_words = blacklist_words | lookup[letter][pos+1]
             lookup[letter][pos+1] = set()
             # This letter is now required at some/any other pos
-            required_letters.add(letter)
-        if op == '-' or op == '_':
+            min_letters[letter] = min_letters.get(letter) or 0
+            min_letters[letter] += 1
+        elif op == '-' or op == '_':
             # (The '_' is just to also allow to keep the Shift key pressed for all op chars.)
             # Letter is not present in this position:
             blacklist_words = blacklist_words | lookup[letter][pos+1]
@@ -355,10 +417,10 @@ while True:
             # Counter-example: target 'shake', but given 's+e-r-v-e+' (clearly not sequential)
             # Because the 'e' in pos 2 is grey, even before the (green) 'e' at pos 5 was processed.
 
-    # After checking each pos for each letter, which were grey once, but otherwise not green later:
+    # After checking each pos for each letter, which were gray once, but otherwise not green later:
     for letter in letter_maybe_del:
         # Did we then find it later as a '*' or '+' letter?
-        if letter not in required_letters:
+        if letter not in min_letters:
             # Then blacklist all those words with this letter anywhere
             for s in lookup[letter]:
                 blacklist_words = blacklist_words | s

@@ -184,6 +184,8 @@ while True:
         alphabet = ''.join(random.sample(alphabet, len(alphabet)))
         continue
 
+    # TODO allow words that are not in our dictionary, exceptionally
+    # But maybe require an explicit '+' or so in that case.
     if word not in scores:
         beep()
         continue
