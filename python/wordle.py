@@ -163,7 +163,8 @@ LEN = opts.length
 # https://woordle.nl/
 
 dict_file = open(opts.dict)
-words_left = set([w.strip() for w in dict_file])
+words_dict = set([w.strip() for w in dict_file])
+words_left = words_dict
 words_left_n = len(words_left)
 
 # Note, this is case sensitive here, as that's relevant for e.g. German
@@ -298,8 +299,11 @@ while True:
     while not guess:
         guess = input(f"Guess:  ")
         if guess not in words_left:
-            guess = None
+            # It's a bad guess, because its's already excluded, but allowed, so just warn
             beep()
+            if guess not in words_dict:
+                # This is not a valid word in the original dictionary
+                guess = None
 
     # Each letter in the reply has a corresponding operator code: exact (+), wild (*), miss (-)
     reply_ops = [ None for i in range(opts.length) ]
