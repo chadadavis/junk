@@ -12,6 +12,7 @@ import os
 
 
 def is_valid_word(word, alphabet):
+    word = word.lower()
     for letter in word:
         if letter not in alphabet:
             return False
@@ -19,6 +20,7 @@ def is_valid_word(word, alphabet):
 
 
 def is_complete_word(word, alphabet):
+    word = word.lower()
     for letter in alphabet:
         if letter not in word:
             return False
@@ -56,7 +58,7 @@ def completer(text: str, state: int) -> str:
     completions += [
                     s for s in scores
                     # Only complete words not yet processed
-                    if not scores[s]['status'] and s.startswith(text.casefold())
+                    if not scores[s]['status'] and s.casefold().startswith(text.casefold())
                     ]
 
     if state < len(completions):
@@ -84,8 +86,9 @@ readline.set_completer(completer)
 readline.parse_and_bind("tab: complete")
 
 opt_parser = OptionParser()
-opt_parser.add_option('-r', '--req', help="A letter that is required in every partial anagram")
+opt_parser.add_option('-r', '--req',      help="A letter that is required in every word")
 opt_parser.add_option('-m', '--min',      help="Minimum length of valid words. Default 4", default=4, type='int')
+opt_parser.add_option('-p', '--pn',       help="Include proper nouns, title case words (eg names). Default 0", default=0, type='int')
 opt_parser.add_option('-d', '--dict',     help="Dictionary name (/usr/share/dict/*) or full path. Default 'american-english'", default='american-english')
 opt_parser.add_option('--play', action='store_true', help="Play against this script, hiding candidate words until guessed.")
 
@@ -94,8 +97,8 @@ if not args:
     opt_parser.print_usage()
     exit(1)
 
-alphabet = args[0]
-required = opts.req or ""
+alphabet = args[0].lower()
+required = (opts.req or "").lower()
 
 if required and required not in alphabet:
     alphabet += required
@@ -108,7 +111,8 @@ count = 0
 
 for word in file:
     word = word.strip()
-    word = word.lower()
+    if opts.pn == 0 and word.istitle():
+        continue
     if len(word) < opts.min:
         continue
     if required and required not in word:
@@ -138,7 +142,7 @@ while True:
     # Clear screen
     # print('\033c')
     # Headings
-    print(f"{'#':>2} {'len':>4} {'freq':>4} {'comb':>4} {'*':>1} {'word'}")
+    print(f"{'#':>2} {'len':>4} {'freq':>4} {'comb':>4} {'*':>1} {'word'}\n")
     # Remaining words, sorted, by status+difficulty
     scores_sorted = scores.values()
     scores_sorted = sorted(scores_sorted, key=itemgetter('difficulty'), reverse=False)
@@ -184,7 +188,7 @@ while True:
         alphabet = ''.join(random.sample(alphabet, len(alphabet)))
         continue
 
-    # TODO allow words that are not in our dictionary, exceptionally
+    # TODO allow words that are not in our dictionary, exceptionally.
     # But maybe require an explicit '+' or so in that case.
     if word not in scores:
         beep()
