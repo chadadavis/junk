@@ -297,11 +297,18 @@ while True:
         print(f"Guess:  {guess}")
 
     while not guess:
-        guess = input(f"Guess:  ")
+        try:
+            guess = input(f"Guess:  ")
+        except:
+            print()
+            exit()
+
+        if match := re.match('\s*([+]?)\s*(.*)\s*', guess):
+            force, guess = match.groups()
         if guess not in words_left:
             # It's a bad guess, because its's already excluded, but allowed, so just warn
             beep()
-            if guess not in words_dict:
+            if not force and guess not in words_dict:
                 # This is not a valid word in the original dictionary
                 guess = None
 
@@ -351,7 +358,12 @@ while True:
         print("Reply: ", reply)
     else:
         while not reply:
-            reply = input("Reply:  ")
+            try:
+                reply = input("Reply:  ")
+            except:
+                print()
+                exit()
+
             if len(reply) != LEN or not re.match('^[*+_-]+$', reply):
                 reply = None
                 beep()
