@@ -21,6 +21,7 @@
 # cf. https://freshman.dev/wordle/#/leaderboard
 # And https://www.reddit.com/r/wordle/comments/s88iq4/a_wordle_bot_leaderboard/
 # And make it print a running average while it's running ?
+# Compare to NYT WordleBot https://www.nytimes.com/2022/04/07/upshot/wordle-bot-introduction.html
 
 # Scoring
 # Once I've already confirmed an S (maybe at a single pos),
@@ -135,6 +136,7 @@ parser.add_option('--top',        type='int',          help="Show top N=20 candi
 parser.add_option('--length',     type='int',          help="Length of all words, default 5", default=5)
 parser.add_option('--scoring',    type='int',          help="Scoring mode")
 parser.add_option('--target',     type='string',       help="Set the target word, e.g. to test")
+parser.add_option('--start',      type='string',       help="Set the start word, e.g. to test")
 parser.add_option('--boost',      type='string',       help="File containing words that are more likely to be picked")
 parser.add_option('--random',     action='store_true', help="Pick a random target, for you to play locally. Else assume unknown.")
 parser.add_option('--auto',       action='store_true', help="The algorithm plays against itself.")
@@ -292,6 +294,10 @@ while True:
 
     guess = None
     if opts.auto:
+        # Was an explicit starting word override given?
+        if opts.start:
+            scores_sorted.insert(0, { 'word': opts.start } )
+            opts.start = None
         # Auto guess the top-scoring remaining word
         guess = scores_sorted[0]['word']
         print(f"Guess:  {guess}")
