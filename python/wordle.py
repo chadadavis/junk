@@ -11,7 +11,29 @@
 # colored gray (and it's *not* sequential, could have gray 'o' before green 'o')
 
 # Backlog:
-# Search for TODO below
+# Or, Search for TODO below in the code
+
+# There is a list of potential target words (the A list), which seems to exclude declensions.
+#   Use a PoS tagger to boost words that are equal to their own stem? (And non-proper-nouns, etc)
+# There is a list of allowed guesses (the B list), which can be strategically useful to excluding letters.
+# Use a decision tree / random forest?
+# https://en.wikipedia.org/wiki/Random_forest
+
+# Scoring
+# Once I've already confirmed an S (maybe at a single pos),
+# the remaining scores for other potential S letters in the word should be updated
+# Is an HMM relevant here?
+
+# eg slate=>price=>whine=>[guide,oxide]
+
+# At the last iteration, guide isn't more likely than oxide, they're equal. When
+# can only say that guide is more likeley than oxide based on the fact that it
+# contains letters that are more frequent in the dictionary as a whole. But, by
+# the time we've eliminated all the other words, the last two words are equally
+# likely to be the answer. It's just hypothetical to score guide higher, but not real.
+
+# Consider not requiring hard-mode always?
+# But that changes a lot of the assumptions that each reply contains all the inforamtion about subsequent candidates ...
 
 # Onto G Collab sheet ? but sync with GitHub?
 
@@ -23,33 +45,6 @@
 # And make it print a running average while it's running ?
 # Compare to NYT WordleBot https://www.nytimes.com/2022/04/07/upshot/wordle-bot-introduction.html
 
-# Scoring
-# Once I've already confirmed an S (maybe at a single pos),
-# the remaining scores for other potential S letters in the word should be updated
-# Is an HMM relevant here?
-
-# Learn:
-# Log previous wordle words, daily:
-#   Exclude (recent) past words from guesses, or flag them, with an age, eg 23w (old)
-
-# Understand the standard dictionary better: (or just get it from the browser JS code)
-#   What's the distribution of word frequencies of past words, relative to the dictionary?
-#   Any words have been repeated on multiple days?
-#   Are any PoS excluded? (e.g. do they include boring pronouns like "their" ?)
-#   Any bias toward PoS (adjectives), or against PoS (plural nouns) ? No plural nouns, it seems.
-# https://medium.com/@gianpaul.r/tokenization-and-parts-of-speech-pos-tagging-in-pythons-nltk-library-2d30f70af13b
-# https://www.nltk.org/book/ch05.html
-
-# There is a list of potential target words (the A list), which seems to exclude declensions.
-#   Use a PoS tagger to boost words that are equal to their own stem? (And non-proper-nouns, etc)
-# There is a list of allowed guesses (the B list), which can be strategically useful to excluding letters.
-# Use a decision tree / random forest?
-# https://en.wikipedia.org/wiki/Random_forest
-
-# Consider other dictionaries. Eg 'trove' (2022-02-23) isn't in any of /usr/share/dict/*
-# Considered other published dictionaries, eg:
-# https://gist.github.com/cfreshman/a03ef2cba789d8cf00c08f767e0fad7b
-
 # TODO be more efficient with processing of duplicates
 
 # Checkout strategy suggestions published by others:
@@ -57,8 +52,6 @@
 #   Alt strategy: maximize information gain of guess by not always including required letters.
 #   What choice of letters gets closest to a 50% split of eligible words (max elimination rate)
 
-# Consider not requiring hard-mode always?
-# But that changes a lot of the assumptions that each reply contains all the inforamtion about subsequent candidates ...
 
 
 import readline
