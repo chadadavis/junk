@@ -59,7 +59,6 @@ import random
 import re
 from optparse import OptionParser
 from operator import itemgetter
-from wordfreq import zipf_frequency
 
 
 def score_letters(word):
@@ -262,7 +261,10 @@ while True:
         # dictionary, since there's some threshold for excluding less common words.
         # However, given two words in the dictionary, that one is twice as frequent
         # as the other doesn't mean it's more likely to be the target word.
+
+        # from wordfreq import zipf_frequency
         # by_word = zipf_frequency(word, 'en')
+
         by_word = .1 if word in boost else 0
         # TODO flag words that pass criteria for being target words (stem, no lead cap in EN)
 
@@ -302,7 +304,8 @@ while True:
             print()
             exit()
 
-        if match := re.match('\s*([+]?)\s*(.*)\s*', guess):
+        match = re.match('\s*([+]?)\s*(.*)\s*', guess)
+        if match:
             force, guess = match.groups()
         if guess not in words_left:
             # It's a bad guess, because its's already excluded, but allowed, so just warn
