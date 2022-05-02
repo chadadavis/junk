@@ -126,13 +126,15 @@ readline.parse_and_bind("tab: complete")
 parser = OptionParser()
 parser.add_option('--top',        type='int',          help="Show top N=20 candidates each round", )
 parser.add_option('--length',     type='int',          help="Length of all words, default 5", default=5)
-parser.add_option('--scoring',    type='int',          help="Scoring mode")
+parser.add_option('--scoring',    type='int',          help="Scoring mode", default=4)
 parser.add_option('--target',     type='string',       help="Set the target word, e.g. to test")
 parser.add_option('--start',      type='string',       help="Set the start word, e.g. to test")
-parser.add_option('--boost',      type='string',       help="File containing words that are more likely to be picked")
 parser.add_option('--random',     action='store_true', help="Pick a random target, for you to play locally. Else assume unknown.")
 parser.add_option('--auto',       action='store_true', help="The algorithm plays against itself.")
 parser.add_option('--dict',       type='string',       help="Path to custom dictionary file, one word per line",
+    default='./wordle-a.dict', # TODO generalize the path
+    )
+parser.add_option('--boost',      type='string',       help="File containing words that are more likely to be picked",
     default='./wordle-a.dict', # TODO generalize the path
     )
 (opts, args) = parser.parse_args()
