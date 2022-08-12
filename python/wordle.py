@@ -309,12 +309,11 @@ while True:
         match = re.match('\s*([+]?)\s*(.*)\s*', guess)
         if match:
             force, guess = match.groups()
-        if guess not in words_left:
+        if guess not in words_left and not force:
             # It's a bad guess, because its's already excluded, but allowed, so just warn
             beep()
-            if not force and guess not in words_dict:
-                # This is not a valid word in the original dictionary
-                guess = None
+            # This is not a valid word in the original dictionary
+            guess = None
 
     # Each letter in the reply has a corresponding operator code: exact (+), wild (*), miss (-)
     reply_ops = [ None for i in range(opts.length) ]

@@ -211,7 +211,6 @@ while True:
             # Because the NYT dict has some words that our dict doesn't
             scores[word] = create_word(word, alphabet, '+')
 
-
     # Lookup definition of a word
     if op == '?':
         # This sed command strips off the first two header lines from the output
