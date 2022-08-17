@@ -81,6 +81,27 @@ def wrapper(string):
     string = "\n".join(lines_wrapped)
     return string
 
+def create_word(word: str, alphabet: str, complete=''):
+
+    # Use an inverse frequency to give more 'difficulty' points for less common words.
+    freq = 100 / (zipf_frequency(word, 'en') or 1)
+    # This puts two scores on a (roughly) 1-100 scale
+    l = 10 * len(word)
+    # And (equally weighed) average them
+    difficulty = (freq + l) / 2
+    if not complete:
+        if is_complete_word(word, alphabet):
+            complete = '*'
+
+    obj = {
+        'word': word,
+        'freq': freq,
+        'l': l,
+        'difficulty': difficulty,
+        'status': complete,
+    }
+    return obj
+
 
 readline.set_completer(completer)
 readline.parse_and_bind("tab: complete")
@@ -120,22 +141,9 @@ for word in file:
     if not is_valid_word(word, alphabet):
         continue
     count += 1
-    complete = '*' if is_complete_word(word, alphabet) else ''
 
-    # This puts two scores on a (roughly) 1-100 scale
-    l = 10 * len(word)
-    # Use an inverse frequency to give more 'difficulty' points for less common words.
-    freq = 100 / (zipf_frequency(word, 'en') or 1)
-    # And (equally weighed) average them
-    difficulty = (freq + l) / 2
+    scores[word] = create_word(word, alphabet)
 
-    scores[word] = {
-        'word': word,
-        'freq': freq,
-        'l': l,
-        'difficulty': difficulty,
-        'status': complete,
-    }
 
 definition = None
 while True:
@@ -188,20 +196,21 @@ while True:
         alphabet = ''.join(random.sample(alphabet, len(alphabet)))
         continue
 
-    # TODO allow words that are not in our dictionary, exceptionally.
-    # But maybe require an explicit '+' or so in that case.
-    if word not in scores:
+    if word in scores:
+        # The default operator is to mark the word as already accepted
+        op = op or '+'
+        if op in ('-', '+'):
+            if scores[word]['status'] == op:
+                # Already did this one
+                beep()
+            scores[word]['status'] = op
+    else:
         beep()
-        continue
+        if op == '+':
+            # But allow a preceding '+' to force acceptance of an unknown word.
+            # Because the NYT dict has some words that our dict doesn't
+            scores[word] = create_word(word, alphabet, '+')
 
-    # The default operator is to mark he word as already accepted
-    op = op or '+'
-    if op in ('-', '+'):
-        if scores[word]['status'] == op:
-            # Already did this one
-            beep()
-            print('already')
-        scores[word]['status'] = op
 
     # Lookup definition of a word
     if op == '?':
