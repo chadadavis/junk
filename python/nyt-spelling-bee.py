@@ -149,8 +149,9 @@ definition = None
 while True:
     # Clear screen
     # print('\033c')
+    print()
     # Headings
-    print(f"{'#':>2} {'len':>4} {'freq':>4} {'comb':>4} {'*':>1} {'word'}\n")
+    print(f"{'#':>2} {'len':>4} {'rare':>4} {'comb':>4} {'*':>1} {'word'}\n")
     # Remaining words, sorted, by status+difficulty
     scores_sorted = scores.values()
     scores_sorted = sorted(scores_sorted, key=itemgetter('difficulty'), reverse=False)
