@@ -21,13 +21,13 @@ def f(x: int = 2, y: float = 3.0) -> int:
     return z
 
 
-def main():
+def main(x=3):
     xn = 1
     yn = 5.0
     zn = f(xn, yn)
     pvars()
-    s="str"
-    s=s.casefold()
+    s = "str"
+    s = s.casefold()
 
 
 if __name__ == "__main__":
