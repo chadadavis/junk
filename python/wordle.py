@@ -367,11 +367,11 @@ while True:
                 print()
                 exit()
 
-            if len(reply) != LEN or not re.match('^[*+_-]+$', reply):
+            if len(reply) != LEN or not re.match('^[yon+*_-]+$', reply):
                 reply = None
                 beep()
 
-    if (opts.target and guess == opts.target) or re.match('^[+]+$', reply):
+    if (opts.target and guess == opts.target) or re.match('^[y+]+$', reply):
         print(f"\nFound: {guesses_n:2d} tries")
         exit()
 
@@ -399,7 +399,7 @@ while True:
         op     = reply[pos]
 
         # Note, the below [pos+1] syntax is because 1-based counting in the target word
-        if op == '+':
+        if op in 'y+': # yes
             # Letter is present, at this position.
             min_letters[letter] = min_letters.get(letter) or 0
             min_letters[letter] += 1
@@ -410,7 +410,7 @@ while True:
                 if l != letter:
                     blacklist_words = blacklist_words | lookup[l][pos+1]
                     lookup[l][pos+1] = set()
-        elif op == '*':
+        elif op in 'o*': # other
             # Letter is still a candidate, but not at this pos.
             # (Might still have (multiple) occurrences of this elsewhere. Don't remove those.)
             blacklist_words = blacklist_words | lookup[letter][pos+1]
@@ -418,8 +418,8 @@ while True:
             # This letter is now required at some/any other pos
             min_letters[letter] = min_letters.get(letter) or 0
             min_letters[letter] += 1
-        elif op == '-' or op == '_':
-            # (The '_' is just to also allow to keep the Shift key pressed for all op chars.)
+        elif op in 'n-_': # no
+            # (The additional '_' is just to also allow to keep the Shift key pressed for all op chars.)
             # Letter is not present in this position:
             blacklist_words = blacklist_words | lookup[letter][pos+1]
             lookup[letter][pos+1] = set()
