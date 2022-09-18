@@ -19,9 +19,9 @@ def is_valid_word(word, alphabet):
     return True
 
 
-def is_complete_word(word, alphabet):
+def is_complete_word(word, alphabet_full):
     word = word.lower()
-    for letter in alphabet:
+    for letter in alphabet_full:
         if letter not in word:
             return False
     return True
@@ -31,15 +31,18 @@ def beep():
     print("\a", end='', flush=True)
 
 
-def print_alphabet(required, alphabet):
-    alphabet = list(alphabet.upper())
-    alphabet.insert(3, required.upper())
+def print_alphabet(alphabet_part, alphabet_req):
+    alphabet_req = alphabet_req or ' '
+    alphabet_part = list(alphabet_part.upper())
+
+    # If there is a required letter, insert it in the middle of the hexagon
+    alphabet_part.insert(3, alphabet_req.upper())
     hex = ''\
         + ' {} {}   \n'\
         + '{} {} {} \n'\
         + ' {} {}   \n'\
         + ''
-    print(hex.format(*alphabet))
+    print(hex.format(*alphabet_part))
 
 
 scores = dict()
@@ -81,7 +84,8 @@ def wrapper(string):
     string = "\n".join(lines_wrapped)
     return string
 
-def create_word(word: str, alphabet: str, complete=''):
+
+def create_word(word: str, alphabet_full: str, complete=''):
 
     # Use an inverse frequency to give more 'difficulty' points for less common words.
     freq = 100 / (zipf_frequency(word, 'en') or 1)
@@ -90,7 +94,7 @@ def create_word(word: str, alphabet: str, complete=''):
     # And (equally weighed) average them
     difficulty = (freq + l) / 2
     if not complete:
-        if is_complete_word(word, alphabet):
+        if is_complete_word(word, alphabet_full):
             complete = '*'
 
     obj = {
@@ -107,7 +111,7 @@ readline.set_completer(completer)
 readline.parse_and_bind("tab: complete")
 
 opt_parser = OptionParser()
-opt_parser.add_option('-r', '--req',      help="A letter that is required in every word")
+opt_parser.add_option('-r', '--req',      help="A letter that is required in every word. Optional.")
 opt_parser.add_option('-m', '--min',      help="Minimum length of valid words. Default 4", default=4, type='int')
 opt_parser.add_option('-p', '--pn',       help="Include proper nouns, title case words (eg names). Default 0", default=0, type='int')
 opt_parser.add_option('-d', '--dict',     help="Dictionary name (/usr/share/dict/*) or full path. Default 'american-english'", default='american-english')
@@ -118,11 +122,12 @@ if not args:
     opt_parser.print_usage()
     exit(1)
 
-alphabet = args[0].lower()
-required = (opts.req or "").lower()
+alphabet_req = (opts.req or "").lower()
+alphabet_part = args[0].lower()
+alphabet_full = alphabet_part
 
-if required and required not in alphabet:
-    alphabet += required
+if alphabet_req and alphabet_req not in alphabet_full:
+    alphabet_full += alphabet_req
 
 if not opts.dict.startswith('/'):
     opts.dict = '/usr/share/dict/' + opts.dict
@@ -136,13 +141,13 @@ for word in file:
         continue
     if len(word) < opts.min:
         continue
-    if required and required not in word:
+    if alphabet_req and alphabet_req not in word:
         continue
-    if not is_valid_word(word, alphabet):
+    if not is_valid_word(word, alphabet_full):
         continue
     count += 1
 
-    scores[word] = create_word(word, alphabet)
+    scores[word] = create_word(word, alphabet_full)
 
 
 definition = None
@@ -168,7 +173,7 @@ while True:
     if opts.play:
         print(f"{missing_n:3d} words to go\n")
 
-    print_alphabet(required, alphabet)
+    print_alphabet(alphabet_part, alphabet_req)
 
     # All words covered?
     if len( [ k for k in scores if not scores[k]['status'] ]    ) == 0:
@@ -194,7 +199,7 @@ while True:
     if op == '*':
         # (re-)randomize the alphabet (for the printed display each iteration).
         # This helps with visually guessing words.
-        alphabet = ''.join(random.sample(alphabet, len(alphabet)))
+        alphabet_part = ''.join(random.sample(alphabet_part, len(alphabet_part)))
         continue
 
     if word in scores:
@@ -210,7 +215,7 @@ while True:
         if op == '+':
             # But allow a preceding '+' to force acceptance of an unknown word.
             # Because the NYT dict has some words that our dict doesn't
-            scores[word] = create_word(word, alphabet, '+')
+            scores[word] = create_word(word, alphabet_full, '+')
 
     # Lookup definition of a word
     if op == '?':
