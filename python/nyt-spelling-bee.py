@@ -10,6 +10,18 @@ import random
 import textwrap
 import os
 
+# TODO backlog:
+
+# NYT spelling bee, make it iteratively expose hints, by showing a count of how
+# many target words begin with the prefix : "a... (7)" then "as... (5)" for each
+# of the letters.
+# Format into a bulleted list?
+#
+# Optionally: once only one word left ("clar..."), but don't expose the last few chars:
+# a hint that exposes the definition (but filter the word
+# out of the def)
+# See eg https://www.nytimes.com/2022/11/08/crosswords/spelling-bee-forum.html
+
 
 def is_valid_word(word, alphabet):
     word = word.lower()
@@ -190,7 +202,7 @@ while True:
         print()
         exit()
 
-    match = re.match('\s*([?+*-]?)\s*(.*)\s*', cmd)
+    match = re.match(r'\s*([?+*-]?)\s*(.*)\s*', cmd)
     if not match:
         beep()
         continue

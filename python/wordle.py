@@ -26,11 +26,11 @@
 
 # eg slate=>price=>whine=>[guide,oxide]
 
-# At the last iteration, guide isn't more likely than oxide, they're equal. When
+# At the last iteration, 'guide' isn't more likely than 'oxide', they're equal. One
 # can only say that guide is more likeley than oxide based on the fact that it
 # contains letters that are more frequent in the dictionary as a whole. But, by
 # the time we've eliminated all the other words, the last two words are equally
-# likely to be the answer. It's just hypothetical to score guide higher, but not real.
+# likely to be the answer. It's just hypothetical to score "guide" higher, but not real.
 
 # Consider not requiring hard-mode always?
 # But that changes a lot of the assumptions that each reply contains all the inforamtion about subsequent candidates ...
@@ -95,10 +95,10 @@ def score_letters(word):
 
 
 def beep():
-    print("\a", end='', flush=True)
+    print("\a", end="", flush=True)
 
 
-def completer(text: str, state: int) -> str:
+def completer(text: str, state: int):
     """Readline (TAB) autocompletion of remaining candidate words"""
     global words_left
 
