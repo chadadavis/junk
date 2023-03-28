@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import requests
 import json
 import sys
@@ -10,6 +12,7 @@ messages = []
 # Function to make a request to OpenAI's API
 
 def get_response(prompt):
+    if not prompt: return
     api_key = open(sys.argv[1]).read().rstrip()
     # url = 'https://api.openai.com/v1/engines/davinci/completions'
     url = 'https://api.openai.com/v1/chat/completions'
@@ -47,14 +50,17 @@ def wrapper(string):
     return string
 
 
-# Main loop
-print("\nAsk a question:\n")
+user_input = ''
+if len(sys.argv) > 2:
+    user_input = ' '.join(sys.argv[2:])
+
 while True:
     try:
-        user_input = input("> ")
-        response = get_response(user_input)
-        wrapped = wrapper(response)
-        print("\n", wrapped, "\n")
-    except:
+        while not user_input:
+            user_input = input("> ")
+        if response := get_response(user_input):
+            print("\n" + wrapper(response) + "\n")
+        user_input = None
+    except (KeyboardInterrupt, EOFError):
         print()
-        exit()
+        sys.exit()
