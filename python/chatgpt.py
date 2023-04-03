@@ -7,9 +7,10 @@ import readline
 import textwrap
 import os
 
-messages = []
-
 # Function to make a request to OpenAI's API
+# https://github.com/openai/openai-cookbook/blob/main/examples/How_to_format_inputs_to_ChatGPT_models.ipynb
+
+messages = []
 
 def get_response(prompt):
     if not prompt: return

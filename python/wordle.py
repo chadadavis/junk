@@ -53,7 +53,7 @@
 #   What choice of letters gets closest to a 50% split of eligible words (max elimination rate)
 
 
-
+import os
 import readline
 import random
 import re
@@ -69,7 +69,6 @@ def score_letters(word):
     used = set()
     for pos, letter in enumerate(word):
 
-        # TODO adapt this for case-sensitive langs like German?
         letter = letter.lower()
 
         if opts.scoring == 2 and letter not in used:
@@ -123,6 +122,9 @@ def completer(text: str, state: int):
 readline.set_completer(completer)
 readline.parse_and_bind("tab: complete")
 
+base_dir = os.path.dirname(os.path.abspath(__file__))
+dict_file_path = os.path.join(base_dir, '..', 'wordle-a.dict')
+
 parser = OptionParser()
 parser.add_option('--top',        type='int',          help="Show top N=20 candidates each round", )
 parser.add_option('--length',     type='int',          help="Length of all words, default 5", default=5)
@@ -132,10 +134,10 @@ parser.add_option('--start',      type='string',       help="Set the start word,
 parser.add_option('--random',     action='store_true', help="Pick a random target, for you to play locally. Else assume unknown.")
 parser.add_option('--auto',       action='store_true', help="The algorithm plays against itself.")
 parser.add_option('--dict',       type='string',       help="Path to custom dictionary file, one word per line",
-    default='./wordle-a.dict', # TODO generalize the path
+    default=dict_file_path,
     )
 parser.add_option('--boost',      type='string',       help="File containing words that are more likely to be picked",
-    default='./wordle-a.dict', # TODO generalize the path
+    default=dict_file_path
     )
 (opts, args) = parser.parse_args()
 # Default to printing 0 choices in auto mode, else 20 (if not already explicitly defined)
@@ -153,10 +155,6 @@ LEN = opts.length
 #   only ASCII (no accents, e.g. "mêlée")
 # =~ 4600 words
 # cat /usr/share/dict/american-english |grep '^.....$' |grep -v '^[A-Z]' |grep -v "'" | LANG=C grep '^[a-z]*$' |sort |uniq > english-lower-len-5.dict
-
-# TODO make this work with /usr/share/dict/*german and .../*dutch
-# eg https://wordle.at/
-# https://woordle.nl/
 
 dict_file = open(opts.dict)
 words_dict = set([w.strip() for w in dict_file])
