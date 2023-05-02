@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 
-import requests
 import json
-import sys
-import readline
-import textwrap
 import os
+import readline
+import requests
+import sys
+import textwrap
 
 # Function to make a request to OpenAI's API
 # https://github.com/openai/openai-cookbook/blob/main/examples/How_to_format_inputs_to_ChatGPT_models.ipynb
@@ -44,7 +44,7 @@ def wrapper(string):
 
     lines_wrapped = []
     for line in string.splitlines():
-        line_wrap = textwrap.wrap(line, WRAP_WIDTH, replace_whitespace=False, drop_whitespace=False)
+        line_wrap = textwrap.wrap(line, WRAP_WIDTH, replace_whitespace=False, drop_whitespace=True)
         line_wrap = line_wrap or ['']
         lines_wrapped += line_wrap
     string = "\t" + "\n\t".join(lines_wrapped)

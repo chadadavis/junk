@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 # This is a script to play, and to help you play and win at, Wordle.
 # https://www.nytimes.com/games/wordle/index.html
@@ -54,11 +54,11 @@
 
 
 import os
-import readline
 import random
 import re
-from optparse import OptionParser
+import readline
 from operator import itemgetter
+from optparse import OptionParser
 
 
 def score_letters(word):

@@ -1,0 +1,6 @@
+ftfy
+langcodes
+msgpack
+regex
+wcwidth
+wordfreq

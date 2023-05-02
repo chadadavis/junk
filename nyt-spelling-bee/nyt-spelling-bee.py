@@ -1,14 +1,15 @@
 #!/usr/bin/env python
 
-import subprocess
-from optparse import OptionParser
-from wordfreq import zipf_frequency
-from operator import itemgetter
+import os
+import random
 import re
 import readline
-import random
+import subprocess
 import textwrap
-import os
+from operator import itemgetter
+from optparse import OptionParser
+
+from wordfreq import zipf_frequency
 
 # TODO backlog:
 
@@ -90,7 +91,7 @@ def wrapper(string):
 
     lines_wrapped = []
     for line in string.splitlines():
-        line_wrap = textwrap.wrap(line, WRAP_WIDTH, replace_whitespace=False, drop_whitespace=False)
+        line_wrap = textwrap.wrap(line, WRAP_WIDTH, replace_whitespace=False, drop_whitespace=True)
         line_wrap = line_wrap or ['']
         lines_wrapped += line_wrap
     string = "\n".join(lines_wrapped)
