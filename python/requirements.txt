@@ -1,1 +1,7 @@
+certifi
+charset-normalizer
+colorama
+idna
+requests
 Unidecode
+urllib3
