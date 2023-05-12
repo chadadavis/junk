@@ -6,9 +6,14 @@ import readline
 import requests
 import sys
 import textwrap
+from colorama import init, Fore, Style
 
 # Function to make a request to OpenAI's API
 # https://github.com/openai/openai-cookbook/blob/main/examples/How_to_format_inputs_to_ChatGPT_models.ipynb
+
+# TODO backlog
+
+# Make Ctrl-L empty the messages and start a fresh conversation, and display that #1 again
 
 messages = []
 
@@ -47,9 +52,18 @@ def wrapper(string):
         line_wrap = textwrap.wrap(line, WRAP_WIDTH, replace_whitespace=False, drop_whitespace=True)
         line_wrap = line_wrap or ['']
         lines_wrapped += line_wrap
-    string = "\t" + "\n\t".join(lines_wrapped)
+    string = "  "  + "\n  ".join(lines_wrapped)
     return string
 
+
+# Set terminal title
+sys.stdout.write('\x1b]2;' + 'GPT' + '\x07')
+
+# Clear screen
+print('\033c')
+
+# Initialize colorama
+init()
 
 user_input = ''
 if len(sys.argv) > 2:
@@ -57,11 +71,17 @@ if len(sys.argv) > 2:
 
 while True:
     try:
+        print("\n" + Fore.YELLOW + str(len(messages)//2+1) + " > ", end='')
+        if user_input: print(user_input)
         while not user_input:
-            user_input = input("> ")
+            user_input = input()
         if response := get_response(user_input):
-            print("\n" + wrapper(response) + "\n")
+            print(Fore.WHITE + "\n" + wrapper(response))
         user_input = None
-    except (KeyboardInterrupt, EOFError):
+    except (EOFError):
+        # Clear screen
+        print('\033c')
+        messages = []
+    except (KeyboardInterrupt):
         print()
         sys.exit()
