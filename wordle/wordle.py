@@ -123,7 +123,7 @@ readline.set_completer(completer)
 readline.parse_and_bind("tab: complete")
 
 base_dir = os.path.dirname(os.path.abspath(__file__))
-dict_file_path = os.path.join(base_dir, '..', 'wordle-a.dict')
+dict_file_path = os.path.join(base_dir, 'wordle-a.dict')
 
 parser = OptionParser()
 parser.add_option('--top',        type='int',          help="Show top N=20 candidates each round", )
