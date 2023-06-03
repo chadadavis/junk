@@ -3,10 +3,11 @@
 import json
 import os
 import readline
-import requests
 import sys
 import textwrap
-from colorama import init, Fore, Style
+
+import requests
+from colorama import Fore, Style, init
 
 # Function to make a request to OpenAI's API
 # https://github.com/openai/openai-cookbook/blob/main/examples/How_to_format_inputs_to_ChatGPT_models.ipynb

@@ -247,8 +247,8 @@ while True:
 
     guesses_n += 1
     print()
-    print(f"Round: {guesses_n}")
-    print(f"Left:  {len(words_left)}")
+    print(f"Round: {guesses_n:4}")
+    print(f"Left:  {len(words_left):4}")
     print()
 
     if not words_left:
