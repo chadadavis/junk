@@ -35,15 +35,16 @@
 # Consider not requiring hard-mode always?
 # But that changes a lot of the assumptions that each reply contains all the inforamtion about subsequent candidates ...
 
-# Onto G Collab sheet ? but sync with GitHub?
-
 # TODO Auto mode: (with stats)
 # Make it into a benchmark mode, that loops over the whole dictionary, and compute the average num guesses.
 # So, that you can then evaluate alternative strategies/scoring across the whole dictionary.
 # cf. https://freshman.dev/wordle/#/leaderboard
 # And https://www.reddit.com/r/wordle/comments/s88iq4/a_wordle_bot_leaderboard/
 # And make it print a running average while it's running ?
+
+# Reimplement the algo to use an approach where the letters/words are chosen based on maximizing the split.
 # Compare to NYT WordleBot https://www.nytimes.com/2022/04/07/upshot/wordle-bot-introduction.html
+# Then display a count of the number of words eliminated per round, along with the count of remaining words
 
 # TODO be more efficient with processing of duplicates
 
