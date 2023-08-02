@@ -170,7 +170,7 @@ while True:
     print()
     # Headings
     print(f"{'#':>2} {'len':>4} {'rare':>4} {'comb':>4} {'*':>1} {'word'}\n")
-    # Remaining words, sorted, by status+difficulty
+    # Remaining words, sorted, by status, and then by difficulty (since sorted() is stable)
     scores_sorted = scores.values()
     scores_sorted = sorted(scores_sorted, key=itemgetter('difficulty'), reverse=False)
     scores_sorted = sorted(scores_sorted, key=itemgetter('status'),     reverse=False)
