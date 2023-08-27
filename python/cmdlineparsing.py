@@ -4,6 +4,8 @@ import sys
 import re
 from optparse import OptionParser
 
+# TODO optparse deprecated, switch to argparse
+
 # parse command line params
 parser = OptionParser()
 parser.add_option("-p", "--plot", dest="plot_filename",

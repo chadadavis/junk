@@ -13,6 +13,8 @@
 # Backlog:
 # Or, Search for TODO below in the code
 
+# TODO optparse deprecated, switch to argparse
+
 # There is a list of potential target words (the A list), which seems to exclude declensions.
 #   Use a PoS tagger to boost words that are equal to their own stem? (And non-proper-nouns, etc)
 # There is a list of allowed guesses (the B list), which can be strategically useful to excluding letters.
@@ -119,6 +121,9 @@ def completer(text: str, state: int):
         # text doesn't match any possible completion
         beep()
 
+
+print("\nTry instead:")
+print("https://replit.com/@chadadavis/Wordle-Whittler")
 
 readline.set_completer(completer)
 readline.parse_and_bind("tab: complete")

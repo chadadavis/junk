@@ -13,6 +13,8 @@ from wordfreq import zipf_frequency
 
 # TODO backlog:
 
+# TODO optparse deprecated, switch to argparse
+
 # NYT spelling bee, make it iteratively expose hints, by showing a count of how
 # many target words begin with the prefix : "a... (7)" then "as... (5)" for each
 # of the letters.

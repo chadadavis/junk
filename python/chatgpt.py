@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import argparse
 import json
 import os
 import readline
@@ -10,28 +11,30 @@ import requests
 from colorama import Fore, Style, init
 
 # Function to make a request to OpenAI's API
+# https://github.com/openai/openai-python
 # https://github.com/openai/openai-cookbook/blob/main/examples/How_to_format_inputs_to_ChatGPT_models.ipynb
 
 # TODO backlog
 
-# Make Ctrl-L empty the messages and start a fresh conversation, and display that #1 again
+# Read from STDIN and append to prompt
+
+# Parse out any files from sys.argv and upload/append them to the prompt.
 
 messages = []
 
-def get_response(prompt):
+def get_response(prompt, key, model):
     if not prompt: return
-    api_key = open(sys.argv[1]).read().rstrip()
     # url = 'https://api.openai.com/v1/engines/davinci/completions'
     url = 'https://api.openai.com/v1/chat/completions'
+    headers = {
+        'Authorization': 'Bearer ' + key,
+        'Content-Type': 'application/json',
+    }
     messages.append({ 'role': 'user', 'content': prompt })
     data = {
-        'messages': messages,
         # 'max_tokens': 50,
-        'model': 'gpt-3.5-turbo',
-    }
-    headers = {
-        'Authorization': 'Bearer ' + api_key,
-        'Content-Type': 'application/json',
+        'model': model,
+        'messages': messages,
     }
     response = requests.post(url, data=json.dumps(data), headers=headers)
     response_json = response.json()
@@ -57,6 +60,26 @@ def wrapper(string):
     return string
 
 
+parser = argparse.ArgumentParser()
+parser.add_argument('-i', '--interactive', action='store_true', help="Continue the conversation after the first response")
+parser.add_argument('-m', '--model',       type=str,            help="Name of OpenAI model, eg gpt-4, default gpt-3.5-turbo", default='gpt-3.5-turbo')
+parser.add_argument('-k', '--keyfile',     type=str,            help="Path to file containing your OpenAI API key")
+parser.add_argument('rest', nargs=argparse.REMAINDER)
+args = parser.parse_args()
+key = open(args.keyfile).read().rstrip()
+
+# Interactive mode if no CLI params given, or force it with -i param
+args.interactive = len(args.rest) == 0 or args.interactive
+
+user_input = ' '.join(args.rest)
+
+if not args.interactive:
+    # Just print the response, unformatted, and exit
+    print(get_response(user_input, key=key, model=args.model))
+    sys.exit()
+
+# Interactive mode:
+
 # Set terminal title
 sys.stdout.write('\x1b]2;' + 'GPT' + '\x07')
 
@@ -66,17 +89,13 @@ print('\033c')
 # Initialize colorama
 init()
 
-user_input = ''
-if len(sys.argv) > 2:
-    user_input = ' '.join(sys.argv[2:])
-
 while True:
     try:
         print("\n" + Fore.YELLOW + str(len(messages)//2+1) + " > ", end='')
         if user_input: print(user_input)
         while not user_input:
             user_input = input()
-        if response := get_response(user_input):
+        if response := get_response(user_input, key=key, model=args.model):
             print(Fore.WHITE + "\n" + wrapper(response))
         user_input = None
     except (EOFError):
