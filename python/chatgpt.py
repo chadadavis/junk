@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import readline
+import select
 import sys
 import textwrap
 
@@ -11,20 +12,23 @@ import requests
 from colorama import Fore, Style, init
 
 # Function to make a request to OpenAI's API
+# https://platform.openai.com/docs/api-reference/chat/
 # https://github.com/openai/openai-python
 # https://github.com/openai/openai-cookbook/blob/main/examples/How_to_format_inputs_to_ChatGPT_models.ipynb
 
 # TODO backlog
 
-# Read from STDIN and append to prompt
+# BUG the select() call prevents any subsequent input() calls from working correctly.
+# Why? How to reset the stdin ?
+# This means that the --interactive mode no longer works if you're also piping data into stdin
+# Would the selectors module help (as opposed to select?)
 
-# Parse out any files from sys.argv and upload/append them to the prompt.
+# Add (multiple?) --file args and upload/append them to the prompt/input
 
 messages = []
 
 def get_response(prompt, key, model):
     if not prompt: return
-    # url = 'https://api.openai.com/v1/engines/davinci/completions'
     url = 'https://api.openai.com/v1/chat/completions'
     headers = {
         'Authorization': 'Bearer ' + key,
@@ -33,6 +37,7 @@ def get_response(prompt, key, model):
     messages.append({ 'role': 'user', 'content': prompt })
     data = {
         # 'max_tokens': 50,
+        'temperature': 0,
         'model': model,
         'messages': messages,
     }
@@ -68,14 +73,30 @@ parser.add_argument('rest', nargs=argparse.REMAINDER)
 args = parser.parse_args()
 key = open(args.keyfile).read().rstrip()
 
-# Interactive mode if no CLI params given, or force it with -i param
+# Interactive/conversation/dialog mode if no CLI params given, or force it with -i param
 args.interactive = len(args.rest) == 0 or args.interactive
 
 user_input = ' '.join(args.rest)
 
+# Check if there is any data being piped into stdin, if so delimit it
+if select.select([sys.stdin,],[],[],0.0)[0]:
+    user_input += '\n```\n'
+    for line in sys.stdin:
+        user_input += line
+    user_input += '\n```\n'
+
+    # BUG This is just a work-around since I don't known why select() prevents input() later
+    args.interactive = False
+
+if user_input:
+    print()
+    print(user_input)
+    print()
+
 if not args.interactive:
     # Just print the response, unformatted, and exit
-    print(get_response(user_input, key=key, model=args.model))
+    if response := get_response(user_input, key=key, model=args.model):
+        print(wrapper(response))
     sys.exit()
 
 # Interactive mode:
@@ -92,16 +113,16 @@ init()
 while True:
     try:
         print("\n" + Fore.YELLOW + str(len(messages)//2+1) + " > ", end='')
-        if user_input: print(user_input)
+        if user_input:
+            print(user_input)
         while not user_input:
             user_input = input()
         if response := get_response(user_input, key=key, model=args.model):
             print(Fore.WHITE + "\n" + wrapper(response))
         user_input = None
     except (EOFError):
-        # Clear screen
-        print('\033c')
         messages = []
+        ...
     except (KeyboardInterrupt):
         print()
         sys.exit()
