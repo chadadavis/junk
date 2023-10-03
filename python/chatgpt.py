@@ -18,10 +18,13 @@ from colorama import Fore, Style, init
 
 # TODO backlog
 
+# Implement custom instructions. If ~/.config/chatgpt-instructions.txt exists, prepend
+
 # BUG the select() call prevents any subsequent input() calls from working correctly.
 # Why? How to reset the stdin ?
 # This means that the --interactive mode no longer works if you're also piping data into stdin
 # Would the selectors module help (as opposed to select?)
+# Or what about opening /dev/stdin as a file (given as a CLI arg)?
 
 # Add (multiple?) --file args and upload/append them to the prompt/input
 
