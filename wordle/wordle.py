@@ -242,9 +242,9 @@ while True:
     words_left = set()
     for letter in lookup:
         for pos in range(LEN):
-            words_left = words_left | lookup[letter][pos+1]
+            words_left = words_left | lookup[letter][pos + 1]
             # Really not efficient, but we need to ensure that wildcard letters present:
-            for w in lookup[letter][pos+1]:
+            for w in lookup[letter][pos + 1]:
                 for l in min_letters:
                     if w.count(l) < min_letters[l]:
                         blacklist_words.add(w)
@@ -281,15 +281,24 @@ while True:
         # by_combined = 10 * by_letter + by_word
         by_combined = by_letter + by_word
 
-        scores[word] = { 'word': word, 'by_word': by_word, 'by_letter': by_letter, 'by_combined': by_combined, }
+        scores[word] = {
+            'word': word,
+            'by_word': by_word,
+            'by_letter': by_letter,
+            'by_combined': by_combined,
+        }
 
     # Sort for top N objs by key
-    scores_sorted = sorted(scores.values(), key=itemgetter('by_combined'), reverse=True)
+    scores_sorted = sorted(scores.values(),
+                           key=itemgetter('by_combined'),
+                           reverse=True)
     if opts.top:
         # Print headings
         print(f"{'lett':>7} {'word':>7} {'combo':>7}")
     for s in scores_sorted[:opts.top]:
-        print(f"{s['by_letter']:7.4f} {s['by_word']:7.1f} {s['by_combined']:7.4f} {s['word']:20s}")
+        print(
+            f"{s['by_letter']:7.4f} {s['by_word']:7.1f} {s['by_combined']:7.4f} {s['word']:20s}"
+        )
 
     print()
 
@@ -297,7 +306,7 @@ while True:
     if opts.auto:
         # Was an explicit starting word override given?
         if opts.start:
-            scores_sorted.insert(0, { 'word': opts.start } )
+            scores_sorted.insert(0, {'word': opts.start})
             opts.start = None
         # Auto guess the top-scoring remaining word
         guess = scores_sorted[0]['word']
@@ -320,7 +329,7 @@ while True:
             guess = None
 
     # Each letter in the reply has a corresponding operator code: exact (+), wild (*), miss (-)
-    reply_ops = [ None for i in range(opts.length) ]
+    reply_ops = [None for i in range(opts.length)]
 
     # eg:  c+a*n-a-l*
     # Which means (0-based index of these chars):
@@ -360,7 +369,6 @@ while True:
 
         reply = ''.join(reply_ops)
 
-
     if reply:
         print("Reply: ", reply)
     else:
@@ -388,7 +396,7 @@ while True:
     # filter_out = [
     #     [], [a,o,p], [f], [], [t,m]
     # ]
-    # TODO 
+    # TODO
     # The only missing info then is when we know the (min) count of duplicate letters, eg 2+ of 'e'
     # Guess:  semen
     # Reply:  +*_+_
@@ -400,10 +408,10 @@ while True:
 
     for pos in range(LEN):
         letter = guess[pos]
-        op     = reply[pos]
+        op = reply[pos]
 
         # Note, the below [pos+1] syntax is because 1-based counting in the target word
-        if op in 'y+': # yes
+        if op in 'y+':  # yes
             # Letter is present, at this position.
             min_letters[letter] = min_letters.get(letter) or 0
             min_letters[letter] += 1
@@ -412,21 +420,21 @@ while True:
             # However, no *other* letter is at *this* pos, so delete all of those.
             for l in lookup:
                 if l != letter:
-                    blacklist_words = blacklist_words | lookup[l][pos+1]
-                    lookup[l][pos+1] = set()
-        elif op in 'o*': # other
+                    blacklist_words = blacklist_words | lookup[l][pos + 1]
+                    lookup[l][pos + 1] = set()
+        elif op in 'o*':  # other
             # Letter is still a candidate, but not at this pos.
             # (Might still have (multiple) occurrences of this elsewhere. Don't remove those.)
-            blacklist_words = blacklist_words | lookup[letter][pos+1]
-            lookup[letter][pos+1] = set()
+            blacklist_words = blacklist_words | lookup[letter][pos + 1]
+            lookup[letter][pos + 1] = set()
             # This letter is now required at some/any other pos
             min_letters[letter] = min_letters.get(letter) or 0
             min_letters[letter] += 1
-        elif op in 'n-_': # no
+        elif op in 'n-_':  # no
             # (The additional '_' is just to also allow to keep the Shift key pressed for all op chars.)
             # Letter is not present in this position:
-            blacklist_words = blacklist_words | lookup[letter][pos+1]
-            lookup[letter][pos+1] = set()
+            blacklist_words = blacklist_words | lookup[letter][pos + 1]
+            lookup[letter][pos + 1] = set()
 
             # Letter *maybe* not present at any other position, but maybe *later* in the word:
             # (Apparently the green letters take priority over the yellow/grey letters).
@@ -442,5 +450,4 @@ while True:
             # Then blacklist all those words with this letter anywhere
             for s in lookup[letter]:
                 blacklist_words = blacklist_words | s
-            lookup[letter] = [ set() for i in range(LEN+1)]
-
+            lookup[letter] = [set() for i in range(LEN + 1)]
