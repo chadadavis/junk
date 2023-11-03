@@ -18,7 +18,8 @@ from colorama import Fore, Style, init
 
 # TODO backlog
 
-# Implement custom instructions. If ~/.config/chatgpt-instructions.txt exists, prepend
+# Implement custom instructions. If ~/.config/chatgpt/custom-instructions.txt exists, prepend
+# Make the message(s) from the 'system' role
 
 # BUG the select() call prevents any subsequent input() calls from working correctly.
 # Why? How to reset the stdin ?
@@ -69,11 +70,29 @@ def wrapper(string):
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-i', '--interactive', action='store_true', help="Continue the conversation after the first response")
-parser.add_argument('-m', '--model',       type=str,            help="Name of OpenAI model, eg gpt-4, default gpt-3.5-turbo", default='gpt-3.5-turbo')
-parser.add_argument('-k', '--keyfile',     type=str,            help="Path to file containing your OpenAI API key")
+parser.add_argument(
+    '-i',
+    '--interactive',
+    action='store_true',
+    help="Continue the conversation after the first response",
+    )
+parser.add_argument(
+    '-m',
+    '--model',
+    type=str,
+    help="Name of OpenAI model, eg gpt-4, default: gpt-3.5-turbo",
+    default='gpt-3.5-turbo',
+    )
+parser.add_argument(
+    '-k',
+    '--keyfile',
+    type=str,
+    help="Path to file containing your OpenAI API key, default: ~/.config/chatgpt/api-key.txt",
+    default=os.path.join(os.environ['HOME'], '.config/chatgpt/api-key.txt'),
+    )
 parser.add_argument('rest', nargs=argparse.REMAINDER)
 args = parser.parse_args()
+
 key = open(args.keyfile).read().rstrip()
 
 # Interactive/conversation/dialog mode if no CLI params given, or force it with -i param
@@ -88,7 +107,7 @@ if select.select([sys.stdin,],[],[],0.0)[0]:
         user_input += line
     user_input += '\n```\n'
 
-    # BUG This is just a work-around since I don't known why select() prevents input() later
+    # TODO BUG This is just a work-around since I don't known why select() prevents input() later
     args.interactive = False
 
 if user_input:
