@@ -8,8 +8,9 @@ import select
 import sys
 import textwrap
 
+import colorama
 import requests
-from colorama import Fore, Style, init
+from colorama import Fore, Style
 
 # Function to make a request to OpenAI's API
 # https://platform.openai.com/docs/api-reference/chat/
@@ -30,6 +31,7 @@ from colorama import Fore, Style, init
 # Add (multiple?) --file args and upload/append them to the prompt/input
 
 messages = []
+
 
 def get_response(prompt, key, model):
     if not prompt: return
@@ -69,31 +71,51 @@ def wrapper(string):
     return string
 
 
+# Initialize colorama
+colorama.init(autoreset=True)
+
 parser = argparse.ArgumentParser()
 parser.add_argument(
     '-i',
     '--interactive',
     action='store_true',
     help="Continue the conversation after the first response",
-    )
+)
 parser.add_argument(
     '-m',
     '--model',
     type=str,
     help="Name of OpenAI model, eg gpt-4, default: gpt-3.5-turbo",
     default='gpt-3.5-turbo',
-    )
+)
 parser.add_argument(
     '-k',
     '--keyfile',
     type=str,
     help="Path to file containing your OpenAI API key, default: ~/.config/chatgpt/api-key.txt",
     default=os.path.join(os.environ['HOME'], '.config/chatgpt/api-key.txt'),
-    )
+)
+parser.add_argument(
+    '--instructions',
+    type=str,
+    help="Path to file containing custom instructions, default: ~/.config/chatgpt/custom-instructions.txt",
+    default=os.path.join(os.environ['HOME'], '.config/chatgpt/custom-instructions.txt'),
+)
 parser.add_argument('rest', nargs=argparse.REMAINDER)
 args = parser.parse_args()
 
+if not os.path.isfile(args.keyfile):
+    print('\n' + Fore.RED + "Error: Cannot read API key file: " + Fore.WHITE + Style.BRIGHT + args.keyfile + '\n')
+    parser.print_help()
+    exit(1)
 key = open(args.keyfile).read().rstrip()
+
+if os.path.isfile(args.instructions):
+    # TODO log this to stderr, or only show if --debug
+    print('\n' + 'INFO: Custom instructions: ' + Style.BRIGHT + args.instructions + '\n')
+    with open(args.instructions, 'r') as file:
+        instructions = file.read()
+        messages.append({ 'role': 'system', 'content': instructions })
 
 # Interactive/conversation/dialog mode if no CLI params given, or force it with -i param
 args.interactive = len(args.rest) == 0 or args.interactive
@@ -128,9 +150,6 @@ sys.stdout.write('\x1b]2;' + 'GPT' + '\x07')
 
 # Clear screen
 print('\033c')
-
-# Initialize colorama
-init()
 
 while True:
     try:
