@@ -19,17 +19,18 @@ from colorama import Fore, Style
 
 # TODO backlog
 
-# Implement custom instructions. If ~/.config/chatgpt/custom-instructions.txt exists, prepend
-# Make the message(s) from the 'system' role
-
 # BUG the select() call prevents any subsequent input() calls from working correctly.
 # Why? How to reset the stdin ?
 # This means that the --interactive mode no longer works if you're also piping data into stdin
+# (But that would be useful, if you want to pipe some data in and then ask followup questions about it)
 # Would the selectors module help (as opposed to select?)
 # Or what about opening /dev/stdin as a file (given as a CLI arg)?
 
 # Add (multiple?) --file args and upload/append them to the prompt/input
 
+################################################################################
+
+# History of all messages in this conversation dialog
 messages = []
 
 
@@ -85,7 +86,7 @@ parser.add_argument(
     '-m',
     '--model',
     type=str,
-    help="Name of OpenAI model, eg gpt-4, default: gpt-3.5-turbo",
+    help="Name of OpenAI model, eg gpt-4, gpt-4-1106-preview, default: gpt-3.5-turbo",
     default='gpt-3.5-turbo',
 )
 parser.add_argument(
