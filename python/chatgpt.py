@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import pprint
 import readline
 import select
 import sys
@@ -13,17 +14,21 @@ import requests
 from colorama import Fore, Style
 
 # Function to make a request to OpenAI's API
+# https://openai.com/pricing
 # https://platform.openai.com/docs/api-reference/chat/
 # https://github.com/openai/openai-python
 # https://github.com/openai/openai-cookbook/blob/main/examples/How_to_format_inputs_to_ChatGPT_models.ipynb
 
 # TODO backlog
 
+# Switch from the low-level `select` module to higher-level `selectors` module, if possible.
+
 # BUG the select() call prevents any subsequent input() calls from working correctly.
 # Why? How to reset the stdin ?
 # This means that the --interactive mode no longer works if you're also piping data into stdin
 # (But that would be useful, if you want to pipe some data in and then ask followup questions about it)
-# Would the selectors module help (as opposed to select?)
+# Would the `selectors` module help?
+# https://docs.python.org/3/library/selectors.html
 # Or what about opening /dev/stdin as a file (given as a CLI arg)?
 
 # Add (multiple?) --file args and upload/append them to the prompt/input
@@ -53,7 +58,7 @@ def get_response(prompt, key, model):
     if 'error' in response_json:
         print(response_json['error'])
         return
-    # print(response_json)
+    if args.debug : pp(response_json)
     content = response_json['choices'][0]['message']['content']
     messages.append({ 'role': 'assistant', 'content': content })
     return content
@@ -72,6 +77,8 @@ def wrapper(string):
     return string
 
 
+pp = pprint.PrettyPrinter().pprint
+
 # Initialize colorama
 colorama.init(autoreset=True)
 
@@ -86,8 +93,9 @@ parser.add_argument(
     '-m',
     '--model',
     type=str,
-    help="Name of OpenAI model, eg gpt-4, gpt-4-1106-preview, default: gpt-3.5-turbo",
-    default='gpt-3.5-turbo',
+    help="Name of OpenAI model, eg gpt-3.5-turbo, gpt-4, gpt-4-turbo, gpt-4-1106-preview (default)",
+    # default='gpt-4',
+    default='gpt-4-1106-preview',
 )
 parser.add_argument(
     '-k',
@@ -102,6 +110,12 @@ parser.add_argument(
     help="Path to file containing custom instructions, default: ~/.config/chatgpt/custom-instructions.txt",
     default=os.path.join(os.environ['HOME'], '.config/chatgpt/custom-instructions.txt'),
 )
+parser.add_argument(
+    '-d',
+    '--debug',
+    action='store_true',
+)
+
 parser.add_argument('rest', nargs=argparse.REMAINDER)
 args = parser.parse_args()
 
@@ -112,8 +126,9 @@ if not os.path.isfile(args.keyfile):
 key = open(args.keyfile).read().rstrip()
 
 if os.path.isfile(args.instructions):
-    # TODO log this to stderr, or only show if --debug
-    print('\n' + 'INFO: Custom instructions: ' + Style.BRIGHT + args.instructions + '\n')
+    if args.debug :
+        info = '\n' + 'INFO: Custom instructions: ' + Style.BRIGHT + args.instructions + '\n'
+        print(info, file=sys.stderr)
     with open(args.instructions, 'r') as file:
         instructions = file.read()
         messages.append({ 'role': 'system', 'content': instructions })
