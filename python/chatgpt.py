@@ -33,6 +33,14 @@ from colorama import Fore, Style
 
 # Add (multiple?) --file args and upload/append them to the prompt/input
 
+# Consider logging the messages/session to a (timestamped) file, so that I can resume a previous session?
+# Default to --resume prev session is new enough. Default to --new if the last is too old. In between? Then prompt to resume (Default: new/don't resume)
+
+# If logging everything, then also rotate the logs (can logrotate due that automatically?)
+
+# Consider also echo'ing the bash session, eg via 'script' or similar, so that I can ask questions about the output of commands?
+# But then we'll also want to be wary of PII
+
 ################################################################################
 
 # History of all messages in this conversation dialog
