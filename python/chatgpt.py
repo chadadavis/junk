@@ -35,11 +35,17 @@ from colorama import Fore, Style
 
 # Consider logging the messages/session to a (timestamped) file, so that I can resume a previous session?
 # Default to --resume prev session is new enough. Default to --new if the last is too old. In between? Then prompt to resume (Default: new/don't resume)
-
 # If logging everything, then also rotate the logs (can logrotate due that automatically?)
+# The Assistants API allows for conversation threads to have an ID (managed server-side) that I could resume:
+# https://platform.openai.com/docs/assistants/overview
 
 # Consider also echo'ing the bash session, eg via 'script' or similar, so that I can ask questions about the output of commands?
 # But then we'll also want to be wary of PII
+# Or consider using the Assistants API to keep track of a thread server-side
+# https://platform.openai.com/docs/assistants/overview
+
+# Consider using the streaming API ? (To get incremental output/typing, like the web version)
+# https://cookbook.openai.com/examples/how_to_stream_completions
 
 ################################################################################
 
