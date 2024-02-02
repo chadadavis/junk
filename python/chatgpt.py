@@ -107,9 +107,8 @@ parser.add_argument(
     '-m',
     '--model',
     type=str,
-    help="Name of OpenAI model, eg gpt-3.5-turbo, gpt-4, gpt-4-turbo, gpt-4-1106-preview (default)",
-    # default='gpt-4',
-    default='gpt-4-1106-preview',
+    help="Name of OpenAI model, eg: gpt-3.5-turbo, gpt-4, gpt-4-turbo, gpt-4-turbo-preview (default)",
+    default='gpt-4-turbo-preview',
 )
 parser.add_argument(
     '-k',
