@@ -1,0 +1,10 @@
+{
+  "description": "Make unfocussed windows darker",
+  "name": "Shade Inactive Windows",
+  "shell-version": [
+    "45.2"
+  ],
+  "url": "https://github.com/hepaajan/shade-inactive-windows",
+  "uuid": "shade-inactive-windows@hepaajan.iki.fi",
+  "version": 7
+}
