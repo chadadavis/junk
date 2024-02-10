@@ -20,6 +20,8 @@ from colorama import Fore, Style
 # https://github.com/openai/openai-cookbook/blob/main/examples/How_to_format_inputs_to_ChatGPT_models.ipynb
 
 # TODO backlog
+def backlog():
+    ...
 
 # Switch from the low-level `select` module to higher-level `selectors` module, if possible.
 
@@ -98,19 +100,6 @@ colorama.init(autoreset=True)
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
-    '-i',
-    '--interactive',
-    action='store_true',
-    help="Continue the conversation after the first response",
-)
-parser.add_argument(
-    '-m',
-    '--model',
-    type=str,
-    help="Name of OpenAI model, eg: gpt-3.5-turbo, gpt-4, gpt-4-turbo, gpt-4-turbo-preview (default)",
-    default='gpt-4-turbo-preview',
-)
-parser.add_argument(
     '-k',
     '--keyfile',
     type=str,
@@ -118,10 +107,29 @@ parser.add_argument(
     default=os.path.join(os.environ['HOME'], '.config/chatgpt/api-key.txt'),
 )
 parser.add_argument(
+    '-i',
+    '--interactive',
+    action='store_true',
+    help="Continue the conversation after the first response",
+)
+parser.add_argument(
+    '--file',
+    type=str,
+    action='append', # Collect into a list
+    help="Path to a file to upload/analyze. Accepts multiple --file args.",
+)
+parser.add_argument(
     '--instructions',
     type=str,
     help="Path to file containing custom instructions, default: ~/.config/chatgpt/custom-instructions.txt",
     default=os.path.join(os.environ['HOME'], '.config/chatgpt/custom-instructions.txt'),
+)
+parser.add_argument(
+    '-m',
+    '--model',
+    type=str,
+    help="Name of OpenAI model, eg: gpt-3.5-turbo, gpt-4, gpt-4-turbo, gpt-4-turbo-preview (default)",
+    default='gpt-4-turbo-preview',
 )
 parser.add_argument(
     '-d',
@@ -145,6 +153,19 @@ if os.path.isfile(args.instructions):
     with open(args.instructions, 'r') as file:
         instructions = file.read()
         messages.append({ 'role': 'system', 'content': instructions })
+
+
+for file in args.file:
+    if args.debug :
+        info = '\n' + 'INFO: File to analyze: ' + Style.BRIGHT + file + '\n'
+        print(info, file=sys.stderr)
+    with open(file, 'r') as file:
+        messages.append({
+            'role': 'system',
+            'content': 'Analyze the following file content and make use of it when answering subsequent question(s)',
+        })
+        messages.append({ 'role': 'user', 'content': file.read() })
+
 
 # Interactive/conversation/dialog mode if no CLI params given, or force it with -i param
 args.interactive = len(args.rest) == 0 or args.interactive
