@@ -69,6 +69,7 @@ def get_response(prompt, key, model):
         'model': model,
         'messages': messages,
     }
+    if args.debug : pp(data)
     response = requests.post(url, data=json.dumps(data), headers=headers)
     response_json = response.json()
     if 'error' in response_json:
@@ -113,9 +114,11 @@ parser.add_argument(
     help="Continue the conversation after the first response",
 )
 parser.add_argument(
+    '-f',
     '--file',
     type=str,
     action='append', # Collect into a list
+    default=[],
     help="Path to a file to upload/analyze. Accepts multiple --file args.",
 )
 parser.add_argument(
@@ -128,16 +131,20 @@ parser.add_argument(
     '-m',
     '--model',
     type=str,
-    help="Name of OpenAI model, eg: gpt-3.5-turbo, gpt-4, gpt-4-turbo, gpt-4-turbo-preview (default)",
-    default='gpt-4-turbo-preview',
+    help="Name of OpenAI model, eg: gpt-3.5-turbo (default), gpt-4, gpt-4-turbo-preview ",
+    default='gpt-3.5-turbo',
 )
 parser.add_argument(
     '-d',
     '--debug',
     action='store_true',
 )
+parser.add_argument(
+    'rest',
+    # Suck up remaining CLI args into `rest`. This is the first input/prompt.
+    nargs=argparse.REMAINDER,
+)
 
-parser.add_argument('rest', nargs=argparse.REMAINDER)
 args = parser.parse_args()
 
 if not os.path.isfile(args.keyfile):
@@ -148,21 +155,22 @@ key = open(args.keyfile).read().rstrip()
 
 if os.path.isfile(args.instructions):
     if args.debug :
-        info = '\n' + 'INFO: Custom instructions: ' + Style.BRIGHT + args.instructions + '\n'
+        info = '\n' + 'INFO: Custom instructions: file://' + Style.BRIGHT + args.instructions + '\n'
         print(info, file=sys.stderr)
     with open(args.instructions, 'r') as file:
         instructions = file.read()
         messages.append({ 'role': 'system', 'content': instructions })
 
 
-for file in args.file:
+# Prepend (the content of) any file(s) that the question/prompt might reference.
+for file_name in args.file:
     if args.debug :
-        info = '\n' + 'INFO: File to analyze: ' + Style.BRIGHT + file + '\n'
+        info = '\n' + 'INFO: File to analyze: ' + Style.BRIGHT + file_name + '\n'
         print(info, file=sys.stderr)
-    with open(file, 'r') as file:
+    with open(file_name, 'r') as file:
         messages.append({
             'role': 'system',
-            'content': 'Analyze the following file content and make use of it when answering subsequent question(s)',
+            'content': f"Context file: {file_name} (Make use of it when answering subsequent questions)",
         })
         messages.append({ 'role': 'user', 'content': file.read() })
 
@@ -170,17 +178,17 @@ for file in args.file:
 # Interactive/conversation/dialog mode if no CLI params given, or force it with -i param
 args.interactive = len(args.rest) == 0 or args.interactive
 
+if args.debug: pp(args)
+
+# Any question/prompt written directly on the CLI
 user_input = ' '.join(args.rest)
 
-# Check if there is any data being piped into stdin, if so delimit it
+# Check if there is any data (already) being piped into stdin, if so delimit it
 if select.select([sys.stdin,],[],[],0.0)[0]:
-    user_input += '\n```\n'
+    user_input += '\n\nstdin:\n```\n'
     for line in sys.stdin:
         user_input += line
     user_input += '\n```\n'
-
-    # TODO BUG This is just a work-around since I don't known why select() prevents input() later
-    args.interactive = False
 
 if user_input:
     print()
@@ -195,11 +203,15 @@ if not args.interactive:
 
 # Interactive mode:
 
+# And re-open stdin to read any subsequent user/keyboard input()
+# This is necessary in case stdin was piped in, which would be stuck on EOF now.
+sys.stdin = open('/dev/tty')
+
 # Set terminal title
 sys.stdout.write('\x1b]2;' + 'GPT' + '\x07')
 
 # Clear screen
-print('\033c')
+# print('\033c')
 
 while True:
     try:
@@ -211,9 +223,6 @@ while True:
         if response := get_response(user_input, key=key, model=args.model):
             print(Fore.WHITE + "\n" + wrapper(response))
         user_input = None
-    except (EOFError):
-        messages = []
-        ...
-    except (KeyboardInterrupt):
+    except (KeyboardInterrupt, EOFError):
         print()
         sys.exit()
