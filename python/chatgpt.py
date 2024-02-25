@@ -23,17 +23,7 @@ from colorama import Fore, Style
 def backlog():
     ...
 
-# Switch from the low-level `select` module to higher-level `selectors` module, if possible.
-
-# BUG the select() call prevents any subsequent input() calls from working correctly.
-# Why? How to reset the stdin ?
-# This means that the --interactive mode no longer works if you're also piping data into stdin
-# (But that would be useful, if you want to pipe some data in and then ask followup questions about it)
-# Would the `selectors` module help?
-# https://docs.python.org/3/library/selectors.html
-# Or what about opening /dev/stdin as a file (given as a CLI arg)?
-
-# Add (multiple?) --file args and upload/append them to the prompt/input
+# Put this into its own repo (so that vscode uses just one venv per workspace/repo)
 
 # Consider logging the messages/session to a (timestamped) file, so that I can resume a previous session?
 # Default to --resume prev session is new enough. Default to --new if the last is too old. In between? Then prompt to resume (Default: new/don't resume)
@@ -215,7 +205,7 @@ sys.stdout.write('\x1b]2;' + 'GPT' + '\x07')
 
 while True:
     try:
-        print("\n" + Fore.YELLOW + str(len(messages)//2+1) + " > ", end='')
+        print("\n" + Fore.YELLOW + str(len(messages) // 2 + 1) + " > ", end='')
         if user_input:
             print(user_input)
         while not user_input:

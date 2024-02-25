@@ -1,9 +1,0 @@
-{
-    "python.pythonPath": "/bin/python",
-    "maven.view": "flat",
-    "python.analysis.typeCheckingMode": "basic",
-    "python.formatting.provider": "none",
-    "cmake.configureOnOpen": false,
-    "[python]": {
-    },
-}
