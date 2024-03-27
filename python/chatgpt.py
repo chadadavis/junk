@@ -82,7 +82,7 @@ def completer(text: str, state: int) -> Optional[str]:
 
     # print(f'\ntext:{text}:', file=sys.stderr)
     # Completions via (current) history session
-    # TODO actually better to maintain a dict from the messages
+    # TODO actually better to maintain a dict from the messages?
     for i in range(1, rl.get_current_history_length() + 1):
         i = rl.get_history_item(i)
         # TODO tokenize / remove punctuation from i ?
@@ -90,16 +90,24 @@ def completer(text: str, state: int) -> Optional[str]:
             completions += [ i ]
 
     # Complete user /commands
-    # Make sure that delims doesn't contain '/'
-    # TODO BUG this prevents completion of any fully qualified file paths ?
-
+    # NB, make sure that completer_delims doesn't contain '/'
     if text.startswith('/'):
         completions += [
             '/' + cmd for cmd in commands if cmd.casefold().startswith(text[1:].casefold())
         ]
 
-    # TODO also complete files if text starts with (~|\.\.?)?\/
-    # But does that depend on delims?
+    # Complete file names matching ${text}*
+    if '/' in text:
+        dir = os.path.dirname(text)
+        if dir != '/': dir += '/'
+        bn = os.path.basename(text)
+        # print(f'\n{dir=}')
+        # print(f'\n{bn=}')
+        for file in os.listdir(dir):
+            if not bn or file.startswith(bn):
+                if os.path.isdir(dir + file): file += '/'
+                # print(f'\n{file=}')
+                completions.append(dir + file)
 
     if state < len(completions):
         return completions[state]
@@ -273,7 +281,7 @@ colorama.init(autoreset=True)
 
 # Init readline completion
 rl.set_completer(completer)
-rl.set_completer_delims(' .,;:?!-*"\'')
+rl.set_completer_delims(' ;?!*"\'') # NB, avoid . and / to complete file paths
 rl.parse_and_bind("tab: complete")
 
 # Init readline history
@@ -326,22 +334,22 @@ for file_name in args.file:
 # If a question was given on the CLI, assume no follow-up, unless -i given
 args.interactive = len(args.rest) == 0 or args.interactive
 # Any question/prompt written directly on the CLI
-user_input = ' '.join(args.rest)
+init_input = ' '.join(args.rest)
 
 if args.debug: pp(args)
 
 # Check if there is any data (already) piped into stdin, if so delimit it
 if select.select([sys.stdin,],[],[],0.0)[0]:
-    user_input += '\n```\n'
-    user_input += sys.stdin.read()
-    user_input += '\n```\n'
-    print('\n', user_input, '\n')
+    init_input += '\n```\n'
+    init_input += sys.stdin.read()
+    init_input += '\n```\n'
+    print('\n', init_input, '\n')
     # Interactive mode reads from stdin, so it's not compat with piped input
     args.interactive = False
 
 if not args.interactive:
     # Just print the response, unformatted, and exit
-    if response := get_response(user_input, key=key, model=args.model):
+    if response := get_response(init_input, key=key, model=args.model):
         print(wrapper(response))
     sys.exit()
 
@@ -381,8 +389,13 @@ while True:
             # , '\n'
         ]
         prompt = ''.join(prompt_items)
+        if init_input:
+            user_input = init_input
+            init_input = None
+        else:
+            user_input = None
         if user_input:
-            print(Style.DIM + prompt , end='')
+            print(Style.DIM + prompt)
             print(user_input)
         while not user_input:
             # NB, no non-printing chars/formatting codes in the input prompt.
@@ -404,6 +417,9 @@ while True:
             rl.remove_history_item(hist_len-1) # Remove the /edit command
             user_input = editor(prev)
             print(Style.DIM + '\r\n' + user_input)
+            if input(Style.BRIGHT + "Submit? (Y/n): ").casefold() == 'n':
+                rl.remove_history_item(hist_len-1)
+                continue
             rl.add_history(user_input)
         elif match := regex.match(r'^\/revert\s*$', user_input):
             prev = rl.get_history_item(hist_len-1)
@@ -414,6 +430,9 @@ while True:
             if messages: messages.pop() # Remove the assistant response
             if messages: messages.pop() # Remove the user prompt
             user_input = None
+        elif match := regex.match(r'^\/(.*?)\s*$', user_input):
+            print("Unknown command: " + match.group())
+            continue
 
         # Do this in every iteration, since we could abort any time
         rl.write_history_file(args.history)
