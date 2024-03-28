@@ -15,21 +15,29 @@
 
 # Put this into its own repo (so that vscode uses just one venv per workspace/repo)
 
+# Use logging.error and logging.warning and .info etc
+
 # And /file to add/list attached files (text for now) (with readline completion of filenames)
+
+# The Assistants API allows for conversation threads to have an ID (managed server-side) that I could resume ?
+# https://platform.openai.com/docs/assistants/overview
+
+# logging/history of conversations/threads
+# Keep a week/month/quarter or so of logs?
+# But note that readline is only logging user messages, not assistant replies
+# Re-format them, so keep track of which 'role' was behind each message
+# Default to --resume prev session if new enough. Default to --new if the last is too old.
+# In between? Then prompt to resume (Default: new/don't resume)
+# If logging to separate files, then also rotate the logs (can logrotate due that automatically?)
 
 # history: give each thread a title/date-stamp/hash (and separate files in ~/.config/chatgpt/...)
 # And /history to list/resume a previous history session/thread (readline completion)
 # And /clear to clear the conversation/thread/start anew
 # And ask GPT (as 'system' user) to provide short (< 50 chars) summary of topic/question/conclusion for each.
 
-# But note that readline is only logging user messages, not assistant replies
-# Re-format them, so keep track of which 'role' was behind each message
-# Default to --resume prev session if new enough. Default to --new if the last is too old.
-# In between? Then prompt to resume (Default: new/don't resume)
-# If logging to separate files, then also rotate the logs (can logrotate due that automatically?)
-# The Assistants API allows for conversation threads to have an ID (managed server-side) that I could resume:
-# https://platform.openai.com/docs/assistants/overview
-# Keep a week/month/quarter or so of logs?
+# Readline:
+# complete words from the conversation history?
+# Do I need to manually keep my own dict of (long) words (without punctuation) ?
 
 # Allow /commands from inside the conversation
 # And ability to list all the commands (and docs)
@@ -44,9 +52,6 @@
 # But then we'll also want to be wary of PII
 # https://platform.openai.com/docs/assistants/overview
 
-# Readline:
-# complete words from the conversation history?
-# Do I need to manually keep my own dict of (long) words (without punctuation) ?
 
 # use https://pypi.org/project/rich/ for formatting, etc
 # eg Alternate background color (subtle) between user/assistant
@@ -58,6 +63,7 @@
 
 import argparse
 import json
+import logging
 import os
 import pprint
 import readline as rl
@@ -75,19 +81,35 @@ from colorama import Back, Fore, Style
 pp = pprint.PrettyPrinter().pprint
 
 
+# TODO put this in a class, and maintain the state there, eg a dict/priority queue
+# And then just send new strings to it to be tokenized
+# Alt. modules on PyPI: https://pypi.org/search/?q=autocomplete
 def completer(text: str, state: int) -> Optional[str]:
     completions = []
     if not text:
         return None
 
     # print(f'\ntext:{text}:', file=sys.stderr)
+
     # Completions via (current) history session
-    # TODO actually better to maintain a dict from the messages?
-    for i in range(1, rl.get_current_history_length() + 1):
-        i = rl.get_history_item(i)
-        # TODO tokenize / remove punctuation from i ?
-        if i.casefold().startswith(text.casefold()):
-            completions += [ i ]
+    # But, we might want to have /commands in the history still
+    items = [ rl.get_history_item(i) for i in range(1, rl.get_current_history_length() + 1)]
+    for t in tokenize(*items):
+        # print(f'hist:{t}:')
+        if t.casefold().startswith(text.casefold()):
+            completions.append(t)
+
+    # TODO merge history/messages, since they're overlapping?
+
+    # TODO assistant messages are not in the readline history, so we need to keep track of them separately
+
+    # Complete tokens from (assistant) messages / responses
+    global messages
+    items = [ m['content'] for m in messages if m['role'] == 'assistant' ]
+    for t in tokenize(*items):
+        # print(f'msg:{t}:')
+        if t.casefold().startswith(text.casefold()):
+            completions.append(t)
 
     # Complete user /commands
     # NB, make sure that completer_delims doesn't contain '/'
@@ -98,14 +120,14 @@ def completer(text: str, state: int) -> Optional[str]:
 
     # Complete file names matching ${text}*
     if '/' in text:
+        bn = os.path.basename(text)
         dir = os.path.dirname(text)
         if dir != '/': dir += '/'
-        bn = os.path.basename(text)
         # print(f'\n{dir=}')
         # print(f'\n{bn=}')
         for file in os.listdir(dir):
-            if not bn or file.startswith(bn):
-                if os.path.isdir(dir + file): file += '/'
+            if not bn or file.casefold().startswith(bn.casefold()):
+                if os.path.isdir(dir+file): file += '/'
                 # print(f'\n{file=}')
                 completions.append(dir + file)
 
@@ -148,6 +170,23 @@ def get_response(prompt, key, model):
     content = response_json['choices'][0]['message']['content']
     messages.append({ 'role': 'assistant', 'content': content })
     return content
+
+
+def tokenize(*strings):
+    """Return a prioritized list of unique tokens from strings.
+    """
+    min_len = 7
+    counts = {}
+    for s in strings:
+        tokens = s.split()
+        for t in tokens:
+            if t.startswith('/'): continue
+            t = t.lstrip('"')
+            t = t.rstrip(':;,.!?"')
+            if len(t) < min_len: continue
+            t = t.lower()
+            counts[t] = counts.get(t, 0) + 1
+    return sorted(counts.keys(), key=lambda x: counts[x], reverse=True)
 
 
 INDENT = 0
@@ -242,6 +281,12 @@ parser.add_argument(
     action='store_true',
 )
 parser.add_argument(
+        '-l',
+        "--level",
+        help=
+        "Logging level, eg: [info, warn(ing), err(or), crit(ical), deb(ug), ]",
+    )
+parser.add_argument(
     'rest',
     # Suck up remaining CLI args into `rest`. This is the first input/prompt.
     nargs=argparse.REMAINDER,
@@ -269,12 +314,34 @@ commands['edit'] = {
 }
 commands['file'] = None
 
+
 # History of all user/assistant messages in this conversation dialog
 messages = []
 
 
 ################################################################################
 # TODO put this in a main function
+
+# Init (debug) logging
+    # Running within a debugger?
+args.debug = args.debug or bool(sys.gettrace())
+
+# Logging level and defaults
+args.level = args.level or (args.debug and 'DEBUG') or 'WARNING'
+# Allow for prefix-matching too,
+# eg warn => WARNING, deb => DEBUG, err => ERROR, crit => CRITICAL, etc
+levels = logging.getLevelNamesMapping()
+for level_str in levels:
+    if level_str.startswith(args.level.upper()):
+        args.level = level_str
+level_int = levels.get(args.level, levels['WARNING'])
+logging.basicConfig(filename=__file__ + '.log',
+                    filemode='w',
+                    level=level_int,
+                    format=f'%(asctime)s %(levelname)-8s %(lineno)4d %(funcName)-20s %(message)s'
+                    )
+logging.info('\n')
+
 
 # Initialize colorama
 colorama.init(autoreset=True)
