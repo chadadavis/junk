@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env /home/chdavis/git/junk/python/venv/bin/python
 
 # Alternatives to this script:
 # https://github.com/kharvd/gpt-cli
@@ -13,16 +13,19 @@
 
 # TODO backlog
 
-# Put this into its own repo (so that vscode uses just one venv per workspace/repo)
-
-# Use logging.error and logging.warning and .info etc
-
-# And /file to add/list attached files (text for now) (with readline completion of filenames)
+# Switch to Python lib to enable server-side history?
+# cf. https://pypi.org/project/openai
+# https://platform.openai.com/docs/api-reference/
+# If you've also got the 'openai' lib installed via pip in venv, you could also eg:
+# $ export OPENAI_API_KEY=$(cat your_key.txt)
+# $ openai api chat.completions.create -m gpt-4 -g user "list of countries by gdp"
 
 # The Assistants API allows for conversation threads to have an ID (managed server-side) that I could resume ?
 # https://platform.openai.com/docs/assistants/overview
+# Does that also allow access the history of my conversations from the ChatGPT web interface? No, it seems.
 
 # logging/history of conversations/threads
+# (keep in sync with readline history?)
 # Keep a week/month/quarter or so of logs?
 # But note that readline is only logging user messages, not assistant replies
 # Re-format them, so keep track of which 'role' was behind each message
@@ -39,11 +42,36 @@
 # complete words from the conversation history?
 # Do I need to manually keep my own dict of (long) words (without punctuation) ?
 
+# Consider using the streaming API ? (To get incremental output/typing, like the web version)
+# https://cookbook.openai.com/examples/how_to_stream_completions
+
+# Put this file into its own repo (so that vscode uses just one venv per workspace/repo)
+# Move this dir to its own repo
+# http://manpages.ubuntu.com/manpages/git-filter-repo
+# or
+# http://manpages.ubuntu.com/manpages/git-filter-branch
+
+# Use logging.error and logging.warning and .info etc
+
+# And /file to add/list attached files (text for now) (with readline completion of filenames)
+# Make this run from any dir
+# Either via #!/usr/bin/env /home/chdavis/git/junk/python/venv/bin/python
+# Or maybe make the script setup it's own venv (?) HOWTO ?
+# I guess I'm looking for how to install a module, eg:
+#     /home/chdavis/git/junk/python/venv/bin/openai
+# ... has a shebang that points to the venv python:
+# #!/home/chdavis/git/junk/python/venv/bin/python3
+
+# Re. uploading files, cf.
+# https://platform.openai.com/docs/api-reference/files/create
+
+
 # Allow /commands from inside the conversation
 # And ability to list all the commands (and docs)
 # Also a parser/regex for each command and its args
 
 # And /model to change the model, and complete possibilities (autocomplete?)
+# via: https://platform.openai.com/docs/api-reference/models/list
 # And /stats to show usage/quota/spend
 # And /instructions to edit custom instructions (external EDITOR)
 # And /shell to run a shell command (or prefix with !)
@@ -56,8 +84,6 @@
 # use https://pypi.org/project/rich/ for formatting, etc
 # eg Alternate background color (subtle) between user/assistant
 
-# Consider using the streaming API ? (To get incremental output/typing, like the web version)
-# https://cookbook.openai.com/examples/how_to_stream_completions
 
 ################################################################################
 
@@ -78,7 +104,95 @@ import regex
 import requests
 from colorama import Back, Fore, Style
 
-pp = pprint.PrettyPrinter().pprint
+
+INDENT = 0
+def width():
+    LINE_WIDTH = os.get_terminal_size().columns
+    WRAP_WIDTH = max(80, int(LINE_WIDTH * .9))
+    return WRAP_WIDTH
+
+
+def wrapper(string):
+    WRAP_WIDTH = width()
+
+    lines_wrapped = []
+    for line in string.splitlines():
+        line_wrap = textwrap.wrap(line, WRAP_WIDTH, replace_whitespace=False, drop_whitespace=True)
+        line_wrap = line_wrap or ['']
+        lines_wrapped += line_wrap
+    indent = ' ' * INDENT
+    string = indent  + ('\n' + indent).join(lines_wrapped)
+    return string
+
+
+pp = pprint.PrettyPrinter(indent=2, width=width(), underscore_numbers=True).pformat
+
+
+def hr():
+    WRAP_WIDTH = width()
+    print(Fore.LIGHTBLACK_EX + '\r' + '─' * WRAP_WIDTH, end='\n')
+
+
+def get_response(prompt, key, model):
+    if not prompt: return
+    url = 'https://api.openai.com/v1/chat/completions'
+    headers = {
+        'Authorization': 'Bearer ' + key,
+        'Content-Type': 'application/json',
+    }
+    messages.append({ 'role': 'user', 'content': prompt })
+    data = {
+        # 'max_tokens': 50,
+        'temperature': 0,
+        'model': model,
+        'messages': messages,
+    }
+    logging.debug(pp(data))
+    response = requests.post(url, data=json.dumps(data), headers=headers)
+    response_json = response.json()
+    if 'error' in response_json:
+        print(response_json['error'])
+        return
+    logging.debug(pp(response_json))
+    content = response_json['choices'][0]['message']['content']
+    messages.append({ 'role': 'assistant', 'content': content })
+    return content
+
+
+def tokenize(*strings):
+    """Return a prioritized list of unique tokens from strings.
+    """
+    min_len = 7
+    counts = {}
+    for s in strings:
+        tokens = s.split()
+        for t in tokens:
+            if t.startswith('/'): continue
+            t = t.lstrip('"')
+            t = t.rstrip(':;,.!?"')
+            if len(t) < min_len: continue
+            t = t.lower()
+            counts[t] = counts.get(t, 0) + 1
+    return sorted(counts.keys(), key=lambda x: counts[x], reverse=True)
+
+
+def editor(content_a: str='', /) -> str:
+    """Edit a (multi-line) string, by running your $EDITOR on a temp file
+
+    TODO module
+    """
+
+    tf_name = '/tmp/' + os.path.basename(__file__).removesuffix('.py') + '.tmp'
+    with open(tf_name, 'w') as tf:
+        tf.write(content_a)
+
+    # The split() is necessary because $EDITOR might contain multiple words
+    subprocess.call(os.getenv('EDITOR', 'nano').split() + [tf_name])
+
+    with open(tf_name, 'r') as tf:
+        content_b = tf.read()
+    os.unlink(tf_name)
+    return content_b
 
 
 # TODO put this in a class, and maintain the state there, eg a dict/priority queue
@@ -144,93 +258,6 @@ def completer(text: str, state: int) -> Optional[str]:
 def beep(n: int = 2):
     for _ in range(n):
         print("\a", end='', flush=True)
-
-
-def get_response(prompt, key, model):
-    if not prompt: return
-    url = 'https://api.openai.com/v1/chat/completions'
-    headers = {
-        'Authorization': 'Bearer ' + key,
-        'Content-Type': 'application/json',
-    }
-    messages.append({ 'role': 'user', 'content': prompt })
-    data = {
-        # 'max_tokens': 50,
-        'temperature': 0,
-        'model': model,
-        'messages': messages,
-    }
-    if args.debug : pp(data)
-    response = requests.post(url, data=json.dumps(data), headers=headers)
-    response_json = response.json()
-    if 'error' in response_json:
-        print(response_json['error'])
-        return
-    if args.debug : pp(response_json)
-    content = response_json['choices'][0]['message']['content']
-    messages.append({ 'role': 'assistant', 'content': content })
-    return content
-
-
-def tokenize(*strings):
-    """Return a prioritized list of unique tokens from strings.
-    """
-    min_len = 7
-    counts = {}
-    for s in strings:
-        tokens = s.split()
-        for t in tokens:
-            if t.startswith('/'): continue
-            t = t.lstrip('"')
-            t = t.rstrip(':;,.!?"')
-            if len(t) < min_len: continue
-            t = t.lower()
-            counts[t] = counts.get(t, 0) + 1
-    return sorted(counts.keys(), key=lambda x: counts[x], reverse=True)
-
-
-INDENT = 0
-def width():
-    LINE_WIDTH = os.get_terminal_size().columns
-    WRAP_WIDTH = min(80, int(LINE_WIDTH * .9))
-    return WRAP_WIDTH
-
-
-def wrapper(string):
-    WRAP_WIDTH = width()
-
-    lines_wrapped = []
-    for line in string.splitlines():
-        line_wrap = textwrap.wrap(line, WRAP_WIDTH, replace_whitespace=False, drop_whitespace=True)
-        line_wrap = line_wrap or ['']
-        lines_wrapped += line_wrap
-    indent = ' ' * INDENT
-    string = indent  + ('\n' + indent).join(lines_wrapped)
-    return string
-
-
-def hr():
-    WRAP_WIDTH = width()
-    print(Fore.LIGHTBLACK_EX + '\r' + '─' * WRAP_WIDTH, end='\n')
-
-
-def editor(content_a: str='', /) -> str:
-    """Edit a (multi-line) string, by running your $EDITOR on a temp file
-
-    TODO module
-    """
-
-    tf_name = '/tmp/' + os.path.basename(__file__).removesuffix('.py') + '.tmp'
-    with open(tf_name, 'w') as tf:
-        tf.write(content_a)
-
-    # The split() is necessary because $EDITOR might contain multiple words
-    subprocess.call(os.getenv('EDITOR', 'nano').split() + [tf_name])
-
-    with open(tf_name, 'r') as tf:
-        content_b = tf.read()
-    os.unlink(tf_name)
-    return content_b
 
 
 parser = argparse.ArgumentParser()
@@ -338,7 +365,7 @@ level_int = levels.get(args.level, levels['WARNING'])
 logging.basicConfig(filename=__file__ + '.log',
                     filemode='w',
                     level=level_int,
-                    format=f'%(asctime)s %(levelname)-8s %(lineno)4d %(funcName)-20s %(message)s'
+                    format='▼ %(asctime)s %(levelname)-8s %(lineno)4d %(funcName)-20s \n%(message)s'
                     )
 logging.info('\n')
 
@@ -349,7 +376,13 @@ colorama.init(autoreset=True)
 # Init readline completion
 rl.set_completer(completer)
 rl.set_completer_delims(' ;?!*"\'') # NB, avoid . and / to complete file paths
-rl.parse_and_bind("tab: complete")
+# menu-complete: Tab cycles through completions
+rl.parse_and_bind(r'TAB:menu-complete')
+
+# This should allow the user to arbitrarily expand long-words from their previous history
+# But, it seems unsupported in the Python readline.
+# But we can tokenize the history and add it to the completer() manually ...
+# rl.parse_and_bind(r'"\e/":dabbrev-expand')
 
 # Init readline history
 args.history = os.path.expanduser(args.history)
@@ -359,22 +392,21 @@ if not os.path.isfile(args.history):
     open(args.history, 'a').close()
 rl.read_history_file(args.history)
 
-# This should allow the user to arbitrarily expand long-words from their previous history
-# TODO Why is this not binding/working ?
-rl.parse_and_bind(r'"\e/":dabbrev-expand')
-
 # Enable bracketed paste mode (allows pasting multi-line content into the prompt)
 os.system('printf "\e[?2004h"')
 # Disable bracketed paste mode
 # os.system('printf "\e[?2004l"')
 
-# Check if the keyfile exists and is readable
-# TODO any way to verify it's a usable key (eg with a test request) ?
-if not os.path.isfile(args.keyfile):
-    print('\n' + Fore.RED + "Error: Cannot read OpenAI API key file: " + Fore.WHITE + Style.BRIGHT + args.keyfile + '\n')
-    parser.print_help()
-    exit(1)
-key = open(args.keyfile).read().rstrip()
+key = os.environ.get('OPENAI_API_KEY')
+# TODO any way to verify it's a usable key (eg with a test request) ? Like verifying the model name? Or the quota/usage
+if not key:
+    try:
+        key = open(args.keyfile).read().rstrip()
+    except:
+        print('\n' + Fore.RED + "Error: Cannot read OpenAI API key file: " + Fore.WHITE + Style.BRIGHT + args.keyfile + '\n')
+        parser.print_help()
+        exit(1)
+
 
 # Load any custom instructions
 if os.path.isfile(args.instructions):
@@ -403,7 +435,7 @@ args.interactive = len(args.rest) == 0 or args.interactive
 # Any question/prompt written directly on the CLI
 init_input = ' '.join(args.rest)
 
-if args.debug: pp(args)
+logging.debug(pp(vars(args)))
 
 # Check if there is any data (already) piped into stdin, if so delimit it
 if select.select([sys.stdin,],[],[],0.0)[0]:
