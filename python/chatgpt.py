@@ -103,6 +103,7 @@ import colorama
 import regex
 import requests
 from colorama import Back, Fore, Style
+import pyperclip
 
 
 INDENT = 0
@@ -157,6 +158,13 @@ def get_response(prompt, key, model):
     content = response_json['choices'][0]['message']['content']
     messages.append({ 'role': 'assistant', 'content': content })
     return content
+
+
+def extract_commands(s: str) -> list:
+    """Extract any sequence(s) of code (from a GPT response)"""
+    # Use regex to find all code blocks wrapped in eg ```bash\n...\n```
+    matches = regex.findall(r'```(?:\w+)\n\s*(.*?)\s*```', s, flags=regex.DOTALL)
+    return matches
 
 
 def tokenize(*strings):
@@ -446,10 +454,15 @@ if select.select([sys.stdin,],[],[],0.0)[0]:
     # Interactive mode reads from stdin, so it's not compat with piped input
     args.interactive = False
 
+
 if not args.interactive:
     # Just print the response, unformatted, and exit
     if response := get_response(init_input, key=key, model=args.model):
         print(wrapper(response))
+        for cmd in extract_commands(response):
+            print(wrapper('Copied:\n' + Style.BRIGHT + cmd))
+            pyperclip.copy(cmd)
+
     sys.exit()
 
 
@@ -542,6 +555,9 @@ while True:
             if response := get_response(user_input, key=key, model=args.model):
                 hr()
                 print(Fore.WHITE + '\r\n' + wrapper(response) + '\n')
+                for cmd in extract_commands(response):
+                    print(wrapper('Copied:\n' + Style.BRIGHT + cmd))
+                    pyperclip.copy(cmd)
 
         user_input = None
     except (KeyboardInterrupt):
