@@ -35,7 +35,7 @@
 
 # history: give each thread a title/date-stamp/hash (and separate files in ~/.config/chatgpt/...)
 # And /history to list/resume a previous history session/thread (readline completion)
-# And /clear to clear the conversation/thread/start anew
+# And /clear to clear the conversation/thread/start anew (reset back to just the instructions)
 # And ask GPT (as 'system' user) to provide short (< 50 chars) summary of topic/question/conclusion for each.
 
 # Readline:
@@ -65,6 +65,9 @@
 # Re. uploading files, cf.
 # https://platform.openai.com/docs/api-reference/files/create
 
+# Custom instructions:
+# Print them on startup ? As a reminder of what in them?
+# But only if interactive mode, and not if piped input
 
 # Allow /commands from inside the conversation
 # And ability to list all the commands (and docs)
@@ -126,7 +129,7 @@ def wrapper(string):
     return string
 
 
-pp = pprint.PrettyPrinter(indent=2, width=width(), underscore_numbers=True).pformat
+pp = pprint.PrettyPrinter(indent=4, width=width(), underscore_numbers=True).pformat
 
 
 def hr():
@@ -136,12 +139,13 @@ def hr():
 
 def get_response(prompt, key, model):
     if not prompt: return
+    global messages
+    messages.append({ 'role': 'user', 'content': prompt })
     url = 'https://api.openai.com/v1/chat/completions'
     headers = {
         'Authorization': 'Bearer ' + key,
         'Content-Type': 'application/json',
     }
-    messages.append({ 'role': 'user', 'content': prompt })
     data = {
         # 'max_tokens': 50,
         'temperature': 0,
@@ -332,23 +336,28 @@ args = parser.parse_args()
 # User /commands
 # TODO also dispatch to the methods that process the args
 commands = {}
+commands['clear'] = {
+    'desc': 'Clear the conversation history',
+}
+commands['edit'] = {
+    'desc': 'Edit the last user message in external $EDITOR',
+}
+commands['file'] = {
+    'desc': 'List/attach files to the conversation/dialogue. TODO ',
+}
+commands['history'] = {
+    'desc': 'List/resume previous conversation/dialogue. TODO ',
+}
+commands['messages'] = {
+    'desc': 'List the messages in this conversation/dialogue',
+}
 commands['model'] = {
     'desc': 'Get/set the OpenAI model',
-    'usage': '/model [model-name]',
     'example': '/model gpt-4-turbo-preview',
 }
 commands['revert'] = {
     'desc': 'Revert/remove the previous user message (and assistant reply)',
-    'usage': '/revert',
-    'example': '/revert',
 }
-commands['edit'] = {
-    'desc': 'Edit the last user message in external $EDITOR',
-    'usage': '/edit',
-    'example': '/edit',
-}
-commands['file'] = None
-
 
 # History of all user/assistant messages in this conversation dialog
 messages = []
@@ -417,10 +426,13 @@ if not key:
 
 
 # Load any custom instructions
-if os.path.isfile(args.instructions):
-    if args.debug :
-        info = '\n' + 'INFO: Custom instructions: file://' + Style.BRIGHT + args.instructions + '\n'
-        print(info, file=sys.stderr)
+# TODO factor this out, to make it easier to reload
+if args.instructions:
+    args.instructions = os.path.abspath(os.path.expanduser(args.instructions))
+if not os.path.isfile(args.instructions):
+    args.instructions = None
+else:
+    logging.info(f'Custom instructions:\nfile://' + args.instructions)
     with open(args.instructions, 'r') as file:
         instructions = file.read()
         messages.append({ 'role': 'system', 'content': instructions })
@@ -433,9 +445,9 @@ for file_name in args.file:
     with open(file_name, 'r') as file:
         messages.append({
             'role': 'system',
-            'content': f"Context file: {file_name} (Make use of it when answering subsequent questions)",
+            'content': f"File:{file_name}\n(Make use of it when answering subsequent questions)\nContent:\n\n",
         })
-        messages.append({ 'role': 'user', 'content': file.read() })
+        messages.append({ 'role': 'system', 'content': file.read() })
 
 # The goal of interactive mode is to allow for follow-up questions.
 # If a question was given on the CLI, assume no follow-up, unless -i given
@@ -491,79 +503,96 @@ print()
 DIGITS = 2
 
 while True:
-    try:
-        # Counts the number of user messages (since they always alternate?)
-        i = len(messages) // 2 + 1
-        prompt_items = [ *[]
-            , '▼ '
-            # , ' ' * min(2,INDENT-DIGITS-1)
-            , f'{i:{DIGITS}d}'
-            # , '\n'
-        ]
-        prompt = ''.join(prompt_items)
-        if init_input:
-            user_input = init_input
-            init_input = None
-        else:
-            user_input = None
-        if user_input:
-            print(Style.DIM + prompt)
-            print(user_input)
-        while not user_input:
+
+    # Counts the number of user messages (since they always alternate?)
+    i = len(messages) // 2 + 1
+    prompt_items = [ *[]
+        , '▼ #'
+        # , ' ' * min(2,INDENT-DIGITS-1)
+        , f'{i:{DIGITS}d}'
+        # , '\n'
+    ]
+    prompt = ''.join(prompt_items)
+    if init_input:
+        user_input = init_input
+        init_input = None
+    else:
+        user_input = None
+    if user_input:
+        print(Style.DIM + prompt)
+        print(user_input)
+
+    while not user_input:
+        try:
             # NB, no non-printing chars/formatting codes in the input prompt.
             # Else readline miscalculates line length, which breaks editing.
             print(Style.DIM + prompt)
             user_input = input(' ' * INDENT)
 
-        hist_len = rl.get_current_history_length()
+        except (KeyboardInterrupt):
+            # Just cancel/reset the current line/prompt
+            print('^C')
+        except (KeyboardInterrupt, EOFError):
+            # Ctrl-D to exit
+            print()
+            sys.exit()
 
-        if match := regex.match(r'^\/model\s*([a-z0-9.-]+)?\s*$', user_input):
-            # /meta commands
-            if match.group(1): args.model = match.group(1)
-            print(Fore.LIGHTBLACK_EX + f"model={args.model}")
-            user_input = None
-        elif match := regex.match(r'^\/edit\s*$', user_input):
-            print(f'Editing ... ', end='', flush=True)
-            # Get the last input, before the /edit command
-            prev = rl.get_history_item(hist_len-1)
-            rl.remove_history_item(hist_len-1) # Remove the /edit command
-            user_input = editor(prev)
-            print(Style.DIM + '\r\n' + user_input)
-            if input(Style.BRIGHT + "Submit? (Y/n): ").casefold() == 'n':
-                rl.remove_history_item(hist_len-1)
-                continue
-            rl.add_history(user_input)
-        elif match := regex.match(r'^\/revert\s*$', user_input):
-            prev = rl.get_history_item(hist_len-1)
-            rl.remove_history_item(hist_len-1) # Remove the / command
-            rl.remove_history_item(hist_len-2) # Remove the prev content
-            print(Style.DIM + '\r\n' + 'Removed: ' + prev)
-            # TODO verify that these correspond
-            if messages: messages.pop() # Remove the assistant response
-            if messages: messages.pop() # Remove the user prompt
-            user_input = None
-        elif match := regex.match(r'^\/(.*?)\s*$', user_input):
-            print("Unknown command: " + match.group())
-            continue
+    hist_len = rl.get_current_history_length()
 
-        # Do this in every iteration, since we could abort any time
-        rl.write_history_file(args.history)
-
-        if user_input:
-            print('... ', end='')
-            # TODO allow this to be Ctrl-C interrupted
-            if response := get_response(user_input, key=key, model=args.model):
-                hr()
-                print(Fore.WHITE + '\r\n' + wrapper(response) + '\n')
-                for cmd in extract_commands(response):
-                    print(wrapper('Copied:\n' + Style.BRIGHT + cmd))
-                    pyperclip.copy(cmd)
-
+    if match := regex.match(r'^\/model\s*([a-z0-9.-]+)?\s*$', user_input):
+        # /meta commands
+        if match.group(1): args.model = match.group(1)
+        print(Fore.LIGHTBLACK_EX + f"model={args.model}")
         user_input = None
-    except (KeyboardInterrupt):
-        # Just cancel/reset the current line/prompt
-        print('^C')
-    except (KeyboardInterrupt, EOFError):
-        # Ctrl-D to exit
-        print()
-        sys.exit()
+    elif match := regex.match(r'^\/edit\s*$', user_input):
+        print(f'Editing ... ', end='', flush=True)
+        # Get the last input, before the /edit command
+        prev = rl.get_history_item(hist_len-1)
+        rl.remove_history_item(hist_len-1) # Remove the /edit command
+        user_input = editor(prev)
+        print(Style.DIM + '\r\n' + user_input)
+        if input(Style.BRIGHT + "Submit? (Y/n): ").casefold() == 'n':
+            rl.remove_history_item(hist_len-1)
+            continue
+        rl.add_history(user_input)
+    elif match := regex.match(r'^\/revert\s*$', user_input):
+        prev = rl.get_history_item(hist_len-1)
+        rl.remove_history_item(hist_len-1) # Remove the / command
+        rl.remove_history_item(hist_len-2) # Remove the prev content
+        print(Style.DIM + '\r\n' + 'Removed: ' + prev)
+        # TODO verify that these correspond
+        if messages: messages.pop() # Remove the assistant response
+        if messages: messages.pop() # Remove the user prompt
+        user_input = None
+    elif match := regex.match(r'^\/messages\s*$', user_input):
+        # Dump all the messages
+        for i, msg in enumerate(messages):
+            Style.DIM
+            print(Style.DIM + f"#{i:2d} {msg['role']:10s}:")
+            print(wrapper(msg['content']) + "\n")
+        continue
+    elif match := regex.match(r'^\/clear\s*$', user_input):
+        # Clear the conversation history
+        # Keep the instructions, if any were given
+        del messages[int(bool(args.instructions)):]
+        continue
+    elif match := regex.match(r'^[?/]', user_input):
+        print("/commands:")
+        for cmd in sorted(commands.keys()):
+            print(f"/{cmd:10s}{commands[cmd]['desc']}")
+        continue
+
+    # Do this in every iteration, since we could abort any time
+    rl.write_history_file(args.history)
+
+    if user_input:
+        print('... ', end='')
+        # TODO allow this to be Ctrl-C interrupted (if we do streaming ...)
+        if response := get_response(user_input, key=key, model=args.model):
+            hr()
+            print(Fore.WHITE + '\r\n' + wrapper(response) + '\n')
+            for cmd in extract_commands(response):
+                print(wrapper('Copied:\n' + Style.BRIGHT + cmd))
+                pyperclip.copy(cmd)
+
+    user_input = None
