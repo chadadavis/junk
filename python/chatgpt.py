@@ -132,9 +132,50 @@ def wrapper(string):
 pp = pprint.PrettyPrinter(indent=4, width=width(), underscore_numbers=True).pformat
 
 
-def hr():
-    WRAP_WIDTH = width()
-    print(Fore.LIGHTBLACK_EX + '\r' + '─' * WRAP_WIDTH, end='\n')
+# Min word length for saving for subsequent tab-completion
+LEN_THRESH = 8
+
+def tokenize(*strings):
+    """Return a prioritized list of unique tokens from strings.
+    """
+    counts = {}
+    for s in strings:
+        tokens = s.split()
+        for t in tokens:
+            if t.startswith('/'): continue
+            t = t.lstrip('"')
+            t = t.rstrip(':;,.!?"')
+            if len(t) < LEN_THRESH: continue
+            t = t.lower()
+            counts[t] = counts.get(t, 0) + 1
+    return sorted(counts.keys(), key=lambda x: counts[x], reverse=True)
+
+
+def highlight_long_tokens(string):
+    """These are the tokens that will be tab-completable in readline
+
+    So, highlight them in the response
+    """
+
+    string = regex.sub(
+        # NB, an fr'string' needs to duplicated {{branes}} to escape them
+        fr'\b(\w{{{LEN_THRESH},}})\b',
+        Style.BRIGHT + r'\1' + Style.RESET_ALL,
+        string
+    )
+
+    # long_words = regex.findall(r'\b\w{' + str(LEN_THRESH) + ',}\b', string)
+    # for word in long_words:
+    #     print(f'{word=}')
+    #     string = string.replace(word, Style.BRIGHT + word + Style.RESET_ALL)
+    return string
+
+
+def extract_commands(s: str) -> list:
+    """Extract any sequence(s) of code (from a GPT response)"""
+    # Use regex to find all code blocks wrapped in eg ```bash\n...\n```
+    matches = regex.findall(r'```(?:\w*)\n\s*(.*?)\s*```', s, flags=regex.DOTALL)
+    return matches
 
 
 def get_response(prompt, key, model):
@@ -164,30 +205,6 @@ def get_response(prompt, key, model):
     return content
 
 
-def extract_commands(s: str) -> list:
-    """Extract any sequence(s) of code (from a GPT response)"""
-    # Use regex to find all code blocks wrapped in eg ```bash\n...\n```
-    matches = regex.findall(r'```(?:\w+)\n\s*(.*?)\s*```', s, flags=regex.DOTALL)
-    return matches
-
-
-def tokenize(*strings):
-    """Return a prioritized list of unique tokens from strings.
-    """
-    min_len = 7
-    counts = {}
-    for s in strings:
-        tokens = s.split()
-        for t in tokens:
-            if t.startswith('/'): continue
-            t = t.lstrip('"')
-            t = t.rstrip(':;,.!?"')
-            if len(t) < min_len: continue
-            t = t.lower()
-            counts[t] = counts.get(t, 0) + 1
-    return sorted(counts.keys(), key=lambda x: counts[x], reverse=True)
-
-
 def editor(content_a: str='', /) -> str:
     """Edit a (multi-line) string, by running your $EDITOR on a temp file
 
@@ -214,8 +231,6 @@ def completer(text: str, state: int) -> Optional[str]:
     completions = []
     if not text:
         return None
-
-    # print(f'\ntext:{text}:', file=sys.stderr)
 
     # Completions via (current) history session
     # But, we might want to have /commands in the history still
@@ -265,6 +280,11 @@ def completer(text: str, state: int) -> Optional[str]:
         beep()
 
     return None
+
+
+def hr():
+    WRAP_WIDTH = width()
+    print(Fore.LIGHTBLACK_EX + '\r' + '─' * WRAP_WIDTH, end='\n')
 
 
 def beep(n: int = 2):
@@ -528,7 +548,7 @@ while True:
             # Else readline miscalculates line length, which breaks editing.
             print(Style.DIM + prompt)
             user_input = input(' ' * INDENT)
-
+            user_input = user_input.strip()
         except (KeyboardInterrupt):
             # Just cancel/reset the current line/prompt
             print('^C')
@@ -539,7 +559,13 @@ while True:
 
     hist_len = rl.get_current_history_length()
 
-    if match := regex.match(r'^\/model\s*([a-z0-9.-]+)?\s*$', user_input):
+    # TODO refactor this into a dispatch table, with functions for each command
+    # Based on the `commands` dict, with a `pattern` for each
+    # But, also need to decide if we allow more than one command/pattern to match
+    # And if we store history and submit to GPT or not
+    # Eg additional attributes for each command, like 'submit' or 'history' or 'exclusive'
+    if False: ...
+    elif match := regex.match(r'^\/model\s*([a-z0-9.-]+)?\s*$', user_input):
         # /meta commands
         if match.group(1): args.model = match.group(1)
         print(Fore.LIGHTBLACK_EX + f"model={args.model}")
@@ -567,7 +593,6 @@ while True:
     elif match := regex.match(r'^\/messages\s*$', user_input):
         # Dump all the messages
         for i, msg in enumerate(messages):
-            Style.DIM
             print(Style.DIM + f"#{i:2d} {msg['role']:10s}:")
             print(wrapper(msg['content']) + "\n")
         continue
@@ -581,6 +606,22 @@ while True:
         for cmd in sorted(commands.keys()):
             print(f"/{cmd:10s}{commands[cmd]['desc']}")
         continue
+    elif match := regex.match(r'^\s*[!$]\s*(.*)', user_input):
+        cmd = match.group(1)
+        # Allow running (bash) functions/aliases
+        source = f'$ {cmd}'
+        out = subprocess.run(source, shell=True, text=True, capture_output=True)
+        if out.stdout:
+            out.stdout = out.stdout.strip()
+            print(out.stdout)
+            pyperclip.copy(out.stdout)
+        if out.stderr:
+            print(Fore.RED + out.stderr, end='')
+
+        messages.append( { 'role': 'user',   'content': '$ ' + cmd } )
+        messages.append( { 'role': 'system', 'content': out.stdout + '\n' + out.stderr } )
+        continue
+
 
     # Do this in every iteration, since we could abort any time
     rl.write_history_file(args.history)
@@ -590,7 +631,7 @@ while True:
         # TODO allow this to be Ctrl-C interrupted (if we do streaming ...)
         if response := get_response(user_input, key=key, model=args.model):
             hr()
-            print(Fore.WHITE + '\r\n' + wrapper(response) + '\n')
+            print('\n' + wrapper(highlight_long_tokens(response)) + '\n')
             for cmd in extract_commands(response):
                 print(wrapper('Copied:\n' + Style.BRIGHT + cmd))
                 pyperclip.copy(cmd)
