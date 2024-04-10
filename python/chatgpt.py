@@ -105,31 +105,23 @@ from typing import Optional
 import colorama
 import regex
 import requests
+import rich.console
+import rich.markdown
 from colorama import Back, Fore, Style
 import pyperclip
 
 
 INDENT = 0
 def width():
-    LINE_WIDTH = os.get_terminal_size().columns
-    WRAP_WIDTH = max(80, int(LINE_WIDTH * .9))
+    WRAP_WIDTH = os.get_terminal_size().columns
+    WRAP_WIDTH = int(WRAP_WIDTH * .8)
+    WRAP_WIDTH = min(100, WRAP_WIDTH)
+    WRAP_WIDTH = max( 80, WRAP_WIDTH)
     return WRAP_WIDTH
 
-
-def wrapper(string):
-    WRAP_WIDTH = width()
-
-    lines_wrapped = []
-    for line in string.splitlines():
-        line_wrap = textwrap.wrap(line, WRAP_WIDTH, replace_whitespace=False, drop_whitespace=True)
-        line_wrap = line_wrap or ['']
-        lines_wrapped += line_wrap
-    indent = ' ' * INDENT
-    string = indent  + ('\n' + indent).join(lines_wrapped)
-    return string
-
-
 pp = pprint.PrettyPrinter(indent=4, width=width(), underscore_numbers=True).pformat
+
+rich_console = rich.console.Console()
 
 
 # Min word length for saving for subsequent tab-completion
@@ -158,30 +150,75 @@ def highlight_long_tokens(string):
     """
 
     string = regex.sub(
-        # NB, an fr'string' needs to duplicated {{branes}} to escape them
+        # NB, an fr'string' needs to duplicate {{braces}} to escape them
         fr'\b(\w{{{LEN_THRESH},}})\b',
         Style.BRIGHT + r'\1' + Style.RESET_ALL,
         string
     )
 
-    # long_words = regex.findall(r'\b\w{' + str(LEN_THRESH) + ',}\b', string)
-    # for word in long_words:
-    #     print(f'{word=}')
-    #     string = string.replace(word, Style.BRIGHT + word + Style.RESET_ALL)
     return string
 
 
-def extract_commands(s: str) -> list:
-    """Extract any sequence(s) of code (from a GPT response)"""
-    # Use regex to find all code blocks wrapped in eg ```bash\n...\n```
-    matches = regex.findall(r'```(?:\w*)\n\s*(.*?)\s*```', s, flags=regex.DOTALL)
-    return matches
+def wrapper(string, end=''):
+    """Wrap text to the terminal width
+
+    end: set to eg two spaces ('  ') to make line breaks explicit with Markdown
+
+    """
+
+    # TODO: use textwrap to do the indent as well?
+    WRAP_WIDTH = width()
+    lines_wrapped = []
+    for line in string.splitlines():
+        # line_wrap = textwrap.wrap(line, WRAP_WIDTH, replace_whitespace=False, drop_whitespace=True)
+        line_wrap = textwrap.wrap(line, WRAP_WIDTH, replace_whitespace=False, drop_whitespace=False)
+        line_wrap = line_wrap or ['']
+        # line_wrap += end
+        lines_wrapped += line_wrap
+    indent = ' ' * INDENT
+    string = indent + (end + '\n' + indent).join(lines_wrapped)
+    return string
 
 
-def get_response(prompt, key, model):
-    if not prompt: return
+def render(string: str) -> None:
+    """Render a response string as Markdown
+
+    Code blocks will also be syntax-highlighted.
+    Code blocks will also be copied to clipboard.
+    """
+
+    # Render/print as markdown
+    rich_console.print(rich.markdown.Markdown(wrapper(string, end='  ')))
+    print()
+
+    # Split on ``` and process every odd block as code, eg to copy to clipboard
+    # Try to re-assemble, to also make modifications to the non-code text?
+    processed = ''
+    sections = string.split('```')
+    for i, section in enumerate(sections):
+        if i % 2 == 0:
+            # Non-code block
+            processed += highlight_long_tokens(section)
+            continue
+        else:
+            lang, code = section.split('\n', 1)
+            code = code.strip('\n')
+            pyperclip.copy(code)
+            processed += f'\n```{lang}\n' + code + '\n```\n'
+
+    processed = wrapper(processed, end='  ')
+
+    # Render/print as markdown
+    # rich_console.print(rich.markdown.Markdown(processed))
+    # print()
+
+
+def get_response(prompt='', /, *, msgs=[], key, model):
     global messages
-    messages.append({ 'role': 'user', 'content': prompt })
+    if not msgs:
+        msgs = messages
+        if prompt:
+            msgs.append({ 'role': 'user', 'content': prompt })
     url = 'https://api.openai.com/v1/chat/completions'
     headers = {
         'Authorization': 'Bearer ' + key,
@@ -191,7 +228,7 @@ def get_response(prompt, key, model):
         # 'max_tokens': 50,
         'temperature': 0,
         'model': model,
-        'messages': messages,
+        'messages': msgs,
     }
     logging.debug(pp(data))
     response = requests.post(url, data=json.dumps(data), headers=headers)
@@ -201,7 +238,7 @@ def get_response(prompt, key, model):
         return
     logging.debug(pp(response_json))
     content = response_json['choices'][0]['message']['content']
-    messages.append({ 'role': 'assistant', 'content': content })
+    msgs.append({ 'role': 'assistant', 'content': content })
     return content
 
 
@@ -226,7 +263,7 @@ def editor(content_a: str='', /) -> str:
 
 # TODO put this in a class, and maintain the state there, eg a dict/priority queue
 # And then just send new strings to it to be tokenized
-# Alt. modules on PyPI: https://pypi.org/search/?q=autocomplete
+# Alt. modules on PyPI ? https://pypi.org/search/?q=autocomplete
 def completer(text: str, state: int) -> Optional[str]:
     completions = []
     if not text:
@@ -258,9 +295,8 @@ def completer(text: str, state: int) -> Optional[str]:
         completions += [
             '/' + cmd for cmd in commands if cmd.casefold().startswith(text[1:].casefold())
         ]
-
-    # Complete file names matching ${text}*
-    if '/' in text:
+    elif '/' in text:
+        # Complete file names matching ${text}*
         bn = os.path.basename(text)
         dir = os.path.dirname(text)
         if dir != '/': dir += '/'
@@ -282,14 +318,38 @@ def completer(text: str, state: int) -> Optional[str]:
     return None
 
 
+def beep(n: int = 2):
+    for _ in range(n):
+        print("\a", end='', flush=True)
+
+
 def hr():
     WRAP_WIDTH = width()
     print(Fore.LIGHTBLACK_EX + '\r' + '─' * WRAP_WIDTH, end='\n')
 
 
-def beep(n: int = 2):
-    for _ in range(n):
-        print("\a", end='', flush=True)
+def set_terminal_title(string=''):
+    prefix = 'gpt-cli'
+    if string:
+        string = ' - ' + string
+    sys.stdout.write('\x1b]2;' + prefix + string + '\x07')
+
+
+def get_chat_topic():
+    global messages
+    global args
+    prompt = (
+            'Generate a one-line title/label/summary for this conversation so far.'
+            'Based on the main question/conclusion/topic.'
+    )
+    msg = { 'role': 'system', 'content': prompt }
+    title = get_response(
+        # Start from the first non-instruction messages
+        msgs=messages[int(bool(args.instructions)):] + [ msg ],
+        key=key,
+        model=args.model,
+    )
+    return title
 
 
 parser = argparse.ArgumentParser()
@@ -355,22 +415,30 @@ args = parser.parse_args()
 
 # User /commands
 # TODO also dispatch to the methods that process the args
+# TODO add an option to show/edit instructions? (easier to leave as CLI arg?)
 commands = {}
 commands['clear'] = {
     'desc': 'Clear the conversation history',
 }
+commands['copy'] = {
+    'desc': 'Copy the last assistant response to the clipboard',
+}
+commands['cp'] = commands['copy']
 commands['edit'] = {
     'desc': 'Edit the last user message in external $EDITOR',
 }
 commands['file'] = {
     'desc': 'List/attach files to the conversation/dialogue. TODO ',
+    'example': '/file ./data.csv',
 }
 commands['history'] = {
     'desc': 'List/resume previous conversation/dialogue. TODO ',
+    # 'example': '/history 3',
 }
 commands['messages'] = {
     'desc': 'List the messages in this conversation/dialogue',
 }
+commands['msgs'] = commands['messages']
 commands['model'] = {
     'desc': 'Get/set the OpenAI model',
     'example': '/model gpt-4-turbo-preview',
@@ -490,10 +558,7 @@ if select.select([sys.stdin,],[],[],0.0)[0]:
 if not args.interactive:
     # Just print the response, unformatted, and exit
     if response := get_response(init_input, key=key, model=args.model):
-        print(wrapper(response))
-        for cmd in extract_commands(response):
-            print(wrapper('Copied:\n' + Style.BRIGHT + cmd))
-            pyperclip.copy(cmd)
+        render(response)
 
     sys.exit()
 
@@ -512,8 +577,9 @@ if not args.interactive:
 # And how to make Shift-Enter or Alt-Enter insert a newline, rather than ending the input() ?
 # And how to make Ctrl-Enter send the message, rather than ending the input() ?
 
-# Set terminal title
-sys.stdout.write('\x1b]2;' + 'gpt-cli' + '\x07')
+# Set terminal default title (until we determine a topical title)
+set_terminal_title()
+title = None
 
 # Clear/scroll screen
 # print('\033c')
@@ -570,6 +636,9 @@ while True:
         if match.group(1): args.model = match.group(1)
         print(Fore.LIGHTBLACK_EX + f"model={args.model}")
         user_input = None
+    elif match := regex.match(r'^\/file\s*(.*?)\s*$', user_input):
+        # TODO list existing files, else upload new one
+        print("# TODO")
     elif match := regex.match(r'^\/edit\s*$', user_input):
         print(f'Editing ... ', end='', flush=True)
         # Get the last input, before the /edit command
@@ -583,24 +652,32 @@ while True:
         rl.add_history(user_input)
     elif match := regex.match(r'^\/revert\s*$', user_input):
         prev = rl.get_history_item(hist_len-1)
-        rl.remove_history_item(hist_len-1) # Remove the / command
-        rl.remove_history_item(hist_len-2) # Remove the prev content
+        rl.remove_history_item(hist_len-1) # Remove the /revert command
+        rl.remove_history_item(hist_len-2) # Remove the prev user Q
         print(Style.DIM + '\r\n' + 'Removed: ' + prev)
         # TODO verify that these correspond
         if messages: messages.pop() # Remove the assistant response
         if messages: messages.pop() # Remove the user prompt
         user_input = None
-    elif match := regex.match(r'^\/messages\s*$', user_input):
+    elif match := regex.match(r'^\/(messages|msgs)\s*$', user_input):
         # Dump all the messages
         for i, msg in enumerate(messages):
             print(Style.DIM + f"#{i:2d} {msg['role']:10s}:")
             print(wrapper(msg['content']) + "\n")
+        continue
+    elif match := regex.match(r'^\/(copy|cp)\s*$', user_input):
+        # Copy the last assistant response to the clipboard
+        msgs = [ m for m in messages if m['role'] == 'assistant' ]
+        if msgs:
+            pyperclip.copy(msgs[-1]['content'])
+            print(Style.DIM + 'Copied to clipboard')
         continue
     elif match := regex.match(r'^\/clear\s*$', user_input):
         # Clear the conversation history
         # Keep the instructions, if any were given
         del messages[int(bool(args.instructions)):]
         continue
+
     elif match := regex.match(r'^[?/]', user_input):
         print("/commands:")
         for cmd in sorted(commands.keys()):
@@ -609,6 +686,7 @@ while True:
     elif match := regex.match(r'^\s*[!$]\s*(.*)', user_input):
         cmd = match.group(1)
         # Allow running (bash) functions/aliases
+        # TODO doc the '$' wrapper, maybe add it as an example to the repo ?
         source = f'$ {cmd}'
         out = subprocess.run(source, shell=True, text=True, capture_output=True)
         if out.stdout:
@@ -631,9 +709,10 @@ while True:
         # TODO allow this to be Ctrl-C interrupted (if we do streaming ...)
         if response := get_response(user_input, key=key, model=args.model):
             hr()
-            print('\n' + wrapper(highlight_long_tokens(response)) + '\n')
-            for cmd in extract_commands(response):
-                print(wrapper('Copied:\n' + Style.BRIGHT + cmd))
-                pyperclip.copy(cmd)
+            render(response)
+
+            if not title:
+                title = get_chat_topic()
+                set_terminal_title(title)
 
     user_input = None
