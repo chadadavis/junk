@@ -416,6 +416,7 @@ args = parser.parse_args()
 # User /commands
 # TODO also dispatch to the methods that process the args
 # TODO add an option to show/edit instructions? (easier to leave as CLI arg?)
+# TODO option to set/(re-)generate the /topic of the conversation (store in history?)
 commands = {}
 commands['clear'] = {
     'desc': 'Clear the conversation history',
