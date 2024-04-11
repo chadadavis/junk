@@ -675,8 +675,10 @@ while True:
         continue
     elif match := regex.match(r'^\/clear\s*$', user_input):
         # Clear the conversation history
-        # Keep the instructions, if any were given
+        # But, keep the instructions, if any were given
         del messages[int(bool(args.instructions)):]
+        # clear terminal, and move cursor to bottom
+        os.system('clear; tput cup "$(tput lines)"')
         continue
 
     elif match := regex.match(r'^[?/]', user_input):
