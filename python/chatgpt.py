@@ -4,13 +4,13 @@
 # https://github.com/kharvd/gpt-cli
 # https://github.com/0xacx/chatGPT-shell-cli
 
-
 # OpenAI's API
 # https://openai.com/pricing
 # https://platform.openai.com/docs/api-reference/chat/
 # https://github.com/openai/openai-python
 # https://github.com/openai/openai-cookbook/blob/main/examples/How_to_format_inputs_to_ChatGPT_models.ipynb
 
+BACKLOG = ...
 # TODO backlog
 
 # Switch to Python lib to enable server-side history?
@@ -352,6 +352,10 @@ def get_chat_topic():
     return title
 
 
+def usage():
+    print("For more info:\nhttps://platform.openai.com/usage")
+
+
 parser = argparse.ArgumentParser()
 
 parser.add_argument(
@@ -412,7 +416,6 @@ parser.add_argument(
 )
 
 args = parser.parse_args()
-
 # User /commands
 # TODO also dispatch to the methods that process the args
 # TODO add an option to show/edit instructions? (easier to leave as CLI arg?)
@@ -447,7 +450,16 @@ commands['model'] = {
 commands['revert'] = {
     'desc': 'Revert/remove the previous user message (and assistant reply)',
 }
-
+commands['regenerate'] = {
+    'desc': 'Regenerate the last response, optionally with higher temp. (percent) TODO',
+    'example': '/regenerate 99',
+}
+commands['title'] = {
+    'desc': 'Get/set a (new) title/topic of the conversation/dialogue TODO',
+}
+commands['usage'] = {
+    'desc': 'Show the OpenAI API usage/quota/spend TODO',
+}
 # History of all user/assistant messages in this conversation dialog
 messages = []
 
@@ -679,8 +691,12 @@ while True:
         del messages[int(bool(args.instructions)):]
         # clear terminal, and move cursor to bottom
         os.system('clear; tput cup "$(tput lines)"')
+        title = None
+        set_terminal_title()
         continue
-
+    elif match := regex.match(r'^\/usage\s*$', user_input):
+        usage()
+        continue
     elif match := regex.match(r'^[?/]', user_input):
         print("/commands:")
         for cmd in sorted(commands.keys()):
