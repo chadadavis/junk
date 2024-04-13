@@ -146,8 +146,10 @@ parser.add_option('--boost',      type='string',       help="File containing wor
     default=dict_file_path
     )
 (opts, args) = parser.parse_args()
-# Default to printing 0 choices in auto mode, else 20 (if not already explicitly defined)
-opts.top = opts.top if opts.top is not None else (0 if opts.auto else 20)
+# Default to printing 0 choices in auto mode
+# Else based on terminal height (if not already explicitly defined)
+top_default = max(10, int(os.get_terminal_size().lines *.9))
+opts.top = opts.top if opts.top is not None else (0 if opts.auto else top_default)
 opts.random = opts.random or opts.auto
 LEN = opts.length
 
