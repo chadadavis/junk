@@ -329,7 +329,7 @@ def hr():
 
 
 def set_terminal_title(string=''):
-    prefix = 'gpt-cli'
+    prefix = 'chatgpt-cli'
     if string:
         string = ' - ' + string
     sys.stdout.write('\x1b]2;' + prefix + string + '\x07')
