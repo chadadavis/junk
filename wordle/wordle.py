@@ -296,7 +296,7 @@ while True:
         print(f"{'lett':>7} {'word':>7} {'combo':>7}")
     for s in scores_sorted[:opts.top]:
         print(
-            f"{s['by_letter']:7.4f} {s['by_word']:7.1f} {s['by_combined']:7.4f} {s['word']:20s}"
+            f"{s['by_letter']:6.3f} {s['by_word']:5.1f} {s['by_combined']:6.3f} {s['word']:10s}"
         )
 
     print()
