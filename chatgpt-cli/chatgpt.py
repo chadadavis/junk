@@ -290,6 +290,7 @@ def completer(text: str, state: int) -> Optional[str]:
             completions.append(t)
 
     # Complete user /commands
+    global commands
     # NB, make sure that completer_delims doesn't contain '/'
     if text.startswith('/'):
         completions += [
@@ -307,6 +308,11 @@ def completer(text: str, state: int) -> Optional[str]:
                 if os.path.isdir(dir+file): file += '/'
                 # print(f'\n{file=}')
                 completions.append(dir + file)
+
+    # Complete model names
+    for m in commands['model']['choices']:
+        if m.casefold().startswith(text):
+            completions.append(m)
 
     if state < len(completions):
         return completions[state]
@@ -356,6 +362,53 @@ def usage():
     print("For more info:\nhttps://platform.openai.com/usage")
 
 
+# User /commands
+# TODO also dispatch to the methods that process the args
+# TODO add an option to show/edit instructions? (easier to leave as CLI arg?)
+# TODO option to set/(re-)generate the /topic of the conversation (store in history?)
+commands = {}
+commands['clear'] = {
+    'desc': 'Clear the conversation history',
+}
+commands['copy'] = {
+    'desc': 'Copy the last assistant response to the clipboard',
+}
+commands['cp'] = commands['copy']
+commands['edit'] = {
+    'desc': 'Edit the last user message in external $EDITOR',
+}
+commands['file'] = {
+    'desc': 'List/attach files to the conversation/dialogue. TODO ',
+    'example': '/file ./data.csv',
+}
+commands['history'] = {
+    'desc': 'List/resume previous conversation/dialogue. TODO ',
+    # 'example': '/history 3',
+}
+commands['messages'] = {
+    'desc': 'List the messages in this conversation/dialogue',
+}
+commands['msgs'] = commands['messages']
+commands['model'] = {
+    'desc': 'Get/set the OpenAI model to target',
+    'example': '/model gpt-4-turbo',
+    'choices':['gpt-3.5-turbo', 'gpt-4', 'gpt-4-turbo'],
+}
+commands['revert'] = {
+    'desc': 'Revert/remove the previous user message (and assistant reply)',
+}
+commands['regenerate'] = {
+    'desc': 'Regenerate the last response, optionally with higher temp. (percent) TODO',
+    'example': '/regenerate 99',
+}
+commands['title'] = {
+    'desc': 'Get/set a (new) title/topic of the conversation/dialogue TODO',
+}
+commands['usage'] = {
+    'desc': 'Show the OpenAI API usage/quota/spend TODO',
+}
+
+
 parser = argparse.ArgumentParser()
 
 parser.add_argument(
@@ -389,8 +442,9 @@ parser.add_argument(
     '-m',
     '--model',
     type=str,
-    help="Name of OpenAI model, eg: gpt-3.5-turbo (default), gpt-4 , gpt-4-turbo-preview , ",
-    default='gpt-3.5-turbo',
+    help="OpenAI model to target, eg: gpt-3.5-turbo , gpt-4 , gpt-4-turbo, ",
+    default='gpt-4-turbo',
+    choices=commands['model']['choices'],
 )
 parser.add_argument(
     '--history',
@@ -416,50 +470,7 @@ parser.add_argument(
 )
 
 args = parser.parse_args()
-# User /commands
-# TODO also dispatch to the methods that process the args
-# TODO add an option to show/edit instructions? (easier to leave as CLI arg?)
-# TODO option to set/(re-)generate the /topic of the conversation (store in history?)
-commands = {}
-commands['clear'] = {
-    'desc': 'Clear the conversation history',
-}
-commands['copy'] = {
-    'desc': 'Copy the last assistant response to the clipboard',
-}
-commands['cp'] = commands['copy']
-commands['edit'] = {
-    'desc': 'Edit the last user message in external $EDITOR',
-}
-commands['file'] = {
-    'desc': 'List/attach files to the conversation/dialogue. TODO ',
-    'example': '/file ./data.csv',
-}
-commands['history'] = {
-    'desc': 'List/resume previous conversation/dialogue. TODO ',
-    # 'example': '/history 3',
-}
-commands['messages'] = {
-    'desc': 'List the messages in this conversation/dialogue',
-}
-commands['msgs'] = commands['messages']
-commands['model'] = {
-    'desc': 'Get/set the OpenAI model',
-    'example': '/model gpt-4-turbo-preview',
-}
-commands['revert'] = {
-    'desc': 'Revert/remove the previous user message (and assistant reply)',
-}
-commands['regenerate'] = {
-    'desc': 'Regenerate the last response, optionally with higher temp. (percent) TODO',
-    'example': '/regenerate 99',
-}
-commands['title'] = {
-    'desc': 'Get/set a (new) title/topic of the conversation/dialogue TODO',
-}
-commands['usage'] = {
-    'desc': 'Show the OpenAI API usage/quota/spend TODO',
-}
+
 # History of all user/assistant messages in this conversation dialog
 messages = []
 
@@ -646,7 +657,11 @@ while True:
     if False: ...
     elif match := regex.match(r'^\/model\s*([a-z0-9.-]+)?\s*$', user_input):
         # /meta commands
-        if match.group(1): args.model = match.group(1)
+        if match.group(1):
+            if not match.group(1) in commands['model']['choices']:
+                print('Models:\n',   commands['model']['choices'])
+                continue
+            args.model = match.group(1)
         print(Fore.LIGHTBLACK_EX + f"model={args.model}")
         user_input = None
     elif match := regex.match(r'^\/file\s*(.*?)\s*$', user_input):
