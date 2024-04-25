@@ -22,7 +22,8 @@ BACKLOG = ...
 
 # The Assistants API allows for conversation threads to have an ID (managed server-side) that I could resume ?
 # https://platform.openai.com/docs/assistants/overview
-# Does that also allow access the history of my conversations from the ChatGPT web interface? No, it seems.
+# But then can I still use the normal Chat API, or do I need to use the Assistant API for everything?
+# https://platform.openai.com/docs/assistants/overview?context=with-streaming
 
 # logging/history of conversations/threads
 # (keep in sync with readline history?)
@@ -50,6 +51,8 @@ BACKLOG = ...
 # http://manpages.ubuntu.com/manpages/git-filter-repo
 # or
 # http://manpages.ubuntu.com/manpages/git-filter-branch
+
+# Package for PyPI / pipx
 
 # Use logging.error and logging.warning and .info etc
 
@@ -83,9 +86,8 @@ BACKLOG = ...
 # But then we'll also want to be wary of PII
 # https://platform.openai.com/docs/assistants/overview
 
-
-# use https://pypi.org/project/rich/ for formatting, etc
-# eg Alternate background color (subtle) between user/assistant
+# any way to access web browsing mode ? for up-to-date info ?
+# Only via Plus on the web?
 
 
 ################################################################################
@@ -103,6 +105,7 @@ import textwrap
 from typing import Optional
 
 import colorama
+import openai
 import regex
 import requests
 import rich.console
@@ -347,6 +350,7 @@ def get_chat_topic():
     prompt = (
             'Generate a one-line title/label/summary for this conversation so far.'
             'Based on the main question/conclusion/topic.'
+            'Similar to a newspaper headline: a short question or conclusion.'
     )
     msg = { 'role': 'system', 'content': prompt }
     title = get_response(
@@ -359,7 +363,54 @@ def get_chat_topic():
 
 
 def usage():
-    print("For more info:\nhttps://platform.openai.com/usage")
+    print("See:\nhttps://platform.openai.com/usage")
+
+
+# User /commands
+# TODO also dispatch to the methods that process the args
+# TODO add an option to show/edit instructions? (easier to leave as CLI arg?)
+# TODO option to set/(re-)generate the /topic of the conversation (store in history?)
+commands = {}
+commands['clear'] = {
+    'desc': 'Clear the conversation history',
+}
+commands['copy'] = {
+    'desc': 'Copy the last assistant response to the clipboard',
+}
+commands['cp'] = commands['copy']
+commands['edit'] = {
+    'desc': 'Edit the last user message in external $EDITOR',
+}
+commands['file'] = {
+    'desc': 'List/attach files to the conversation/dialogue. TODO ',
+    'example': '/file ./data.csv',
+}
+commands['history'] = {
+    'desc': 'List/resume previous conversation/dialogue. TODO ',
+    # 'example': '/history 3',
+}
+commands['messages'] = {
+    'desc': 'List the messages in this conversation/dialogue',
+}
+commands['msgs'] = commands['messages']
+commands['model'] = {
+    'desc': 'Get/set the OpenAI model to target',
+    'example': '/model gpt-4-turbo',
+    'choices':['gpt-3.5-turbo', 'gpt-4', 'gpt-4-turbo'],
+}
+commands['revert'] = {
+    'desc': 'Revert/remove the previous user message (and assistant reply)',
+}
+commands['regenerate'] = {
+    'desc': 'Regenerate the last response, optionally with higher temp. (percent) TODO',
+    'example': '/regenerate 99',
+}
+commands['title'] = {
+    'desc': 'Get/set a (new) title/topic of the conversation/dialogue TODO',
+}
+commands['usage'] = {
+    'desc': 'Show the OpenAI API usage/quota/spend TODO',
+}
 
 
 # User /commands
@@ -650,10 +701,11 @@ while True:
     hist_len = rl.get_current_history_length()
 
     # TODO refactor this into a dispatch table, with functions for each command
-    # Based on the `commands` dict, with a `pattern` for each
+    # Based on the `commands` dict
+    # Use `match` to match the command name, and grab any args in an optional list
     # But, also need to decide if we allow more than one command/pattern to match
     # And if we store history and submit to GPT or not
-    # Eg additional attributes for each command, like 'submit' or 'history' or 'exclusive'
+    # Eg additional attributes for each command, like 'submit' or 'history' or 'exclusive' ?
     if False: ...
     elif match := regex.match(r'^\/model\s*([a-z0-9.-]+)?\s*$', user_input):
         # /meta commands
@@ -667,15 +719,20 @@ while True:
     elif match := regex.match(r'^\/file\s*(.*?)\s*$', user_input):
         # TODO list existing files, else upload new one
         print("# TODO")
-    elif match := regex.match(r'^\/edit\s*$', user_input):
+    elif match := regex.match(r'^\/edit\s*(.*)\s*$', user_input):
         print(f'Editing ... ', end='', flush=True)
-        # Get the last input, before the /edit command
-        prev = rl.get_history_item(hist_len-1)
-        rl.remove_history_item(hist_len-1) # Remove the /edit command
-        user_input = editor(prev)
+        if match.group(1):
+            edit_content = match.group(1)
+        else:
+            # Get the prev input, before this /edit command
+            edit_content = rl.get_history_item(hist_len-1)
+            # TODO but then do we want to replace this msg in `messages` ?
+        user_input = editor(edit_content)
+        # TODO print with rich ?
         print(Style.DIM + '\r\n' + user_input)
         if input(Style.BRIGHT + "Submit? (Y/n): ").casefold() == 'n':
-            rl.remove_history_item(hist_len-1)
+            # Remove the answer to the input() question
+            rl.remove_history_item(hist_len)
             continue
         rl.add_history(user_input)
     elif match := regex.match(r'^\/revert\s*$', user_input):
