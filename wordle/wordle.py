@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+# TODO git-filter-repo into own repo, and set #! line
+
 # This is a script to play, and to help you play and win at, Wordle.
 # https://www.nytimes.com/games/wordle/index.html
 # https://en.wikipedia.org/wiki/Wordle

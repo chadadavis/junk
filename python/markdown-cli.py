@@ -1,5 +1,7 @@
 #!/usr/bin/env /home/chdavis/git/junk/python/venv/bin/python
 
+# TODO move this into dotfiles?
+
 import sys
 from rich.console import Console
 from rich.markdown import Markdown
