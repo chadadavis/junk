@@ -1,4 +1,4 @@
-#!/usr/bin/env /home/chdavis/git/junk/python/venv/bin/python
+#!/usr/bin/env python3
 
 # TODO move this into dotfiles?
 
@@ -12,5 +12,14 @@ else:
     file = sys.stdin
 
 content = file.read()
-console = Console()
-console.print(Markdown(content))
+
+# Force ANSI codes, even if output is piped (eg to a pager)
+console = Console(force_terminal=True)
+
+try:
+    with console.pager(styles=True, links=True):
+        console.print(Markdown(content))
+except BrokenPipeError:
+    # eg just quiting the pager before EOF
+    pass
+
