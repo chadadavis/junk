@@ -320,7 +320,7 @@ while True:
             print()
             exit()
 
-        match = re.match('\s*([+]?)\s*(.*)\s*', guess)
+        match = re.match(r'\s*([+]?)\s*(.*)\s*', guess)
         if match:
             force, guess = match.groups()
         if guess not in words_left and not force:
@@ -380,11 +380,11 @@ while True:
                 print()
                 exit()
 
-            if len(reply) != LEN or not re.match('^[yon+*_-]+$', reply):
+            if len(reply) != LEN or not re.match(r'^[yon+*_-]+$', reply):
                 reply = None
                 beep()
 
-    if (opts.target and guess == opts.target) or re.match('^[y+]+$', reply):
+    if (opts.target and guess == opts.target) or re.match(r'^[y+]+$', reply):
         print(f"\nFound: {guesses_n:2d} tries")
         exit()
 
